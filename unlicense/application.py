@@ -1,14 +1,17 @@
 import logging
 import functools
+import os
 import struct
 import sys
 from importlib import resources
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from time import sleep
 from typing import (List, Tuple, Callable, Dict, Any, Optional, Set)
 
 import frida  # type: ignore
 import frida.core  # type: ignore
+import pyscylla  # type: ignore
 from unicorn import (  # type: ignore
     Uc, UcError, UC_ARCH_X86, UC_MODE_32, UC_PROT_READ, UC_PROT_WRITE,
     UC_PROT_ALL, UC_HOOK_MEM_UNMAPPED, UC_HOOK_BLOCK)
@@ -40,9 +43,9 @@ def main() -> int:
         return 2
 
     main_module_name = exe_path.name
-    session, script, continue_events = frida_spawn_instrument(exe_path)
+    pid, session, script, continue_events = frida_spawn_instrument(exe_path)
     try:
-        interactive_mode(script, continue_events, main_module_name)
+        interactive_mode(script, continue_events, pid, main_module_name)
     finally:
         session.detach()
 
@@ -50,10 +53,11 @@ def main() -> int:
 
 
 def frida_spawn_instrument(
-        exe_path: Path
-) -> Tuple[frida.core.Session, frida.core.Script, List[str]]:
-    continue_events: List[str] = []
-    pid = frida.spawn((str(exe_path), ))
+    exe_path: Path
+) -> Tuple[int, frida.core.Session, frida.core.Script, List[Tuple[str, str,
+                                                                  str]]]:
+    continue_events: List[Tuple[str, str, str]] = []
+    pid: int = frida.spawn((str(exe_path), ))
     session = frida.attach(pid)
     frida_js = resources.open_text("unlicense.resources", "frida.js").read()
     script = session.create_script(frida_js)
@@ -65,11 +69,11 @@ def frida_spawn_instrument(
     frida_rpc.setup_oep_tracing(exe_path.name)
     frida.resume(pid)
 
-    return session, script, continue_events
+    return pid, session, script, continue_events
 
 
-def frida_callback(continue_events: List[str], message: Dict[str, Any],
-                   _data: Any) -> None:
+def frida_callback(continue_events: List[Tuple[str, str, str]],
+                   message: Dict[str, Any], _data: Any) -> None:
     msg_type = message['type']
     if msg_type == 'error':
         LOG.error(message)
@@ -80,7 +84,8 @@ def frida_callback(continue_events: List[str], message: Dict[str, Any],
         payload = message['payload']
         event = payload.get('event', '')
         if event == 'possible OEP':
-            continue_events.append(payload['continue_event'])
+            continue_events.append((payload['OEP'], payload['OEP_RVA'],
+                                    payload['continue_event']))
             LOG.info(
                 f"We reached the OEP ({payload['OEP']}-{payload['OEP_RVA']}), "
                 "you can now start to dump by pressing 'd' (or press 'r' to resume the process)"
@@ -90,7 +95,8 @@ def frida_callback(continue_events: List[str], message: Dict[str, Any],
     raise NotImplementedError('Unknown message received')
 
 
-def interactive_mode(script: frida.core.Script, continue_events: List[str],
+def interactive_mode(script: frida.core.Script,
+                     continue_events: List[Tuple[str, str, str]], pid: int,
                      main_module_name: str) -> None:
     frida_rpc = script.exports
     cmd = ''
@@ -100,16 +106,35 @@ def interactive_mode(script: frida.core.Script, continue_events: List[str],
             for code in continue_events:
                 script.post({'type': code})
         if cmd == "d":
+            oep_s, eop_rva_s, _ = continue_events[0]
+            oep = int(oep_s, 16)
+            oep_rva = int(eop_rva_s, 16)
+            image_base = oep - oep_rva
             process_info = ProcessInfo(main_module_name,
                                        frida_rpc.get_architecture(),
                                        frida_rpc.get_pointer_size(),
                                        frida_rpc.get_page_size())
             iat_info = find_iat(frida_rpc, process_info)
-            if iat_info is not None:
-                LOG.info(f"IAT found: 0x{iat_info[0]:x}")
-                unwrap_iat(frida_rpc, iat_info, process_info)
-            else:
+            if iat_info is None:
                 LOG.error("IAT not found")
+                continue
+
+            LOG.info(f"IAT found: 0x{iat_info[0]:x}")
+            unwrap_iat(frida_rpc, iat_info, process_info)
+            LOG.info(f"Dumping PE with OEP=0x{oep:x} ...")
+            with TemporaryDirectory() as tmp_dir:
+                TMP_FILE_PATH = os.path.join(tmp_dir, "unlicense.tmp")
+                dump_success = pyscylla.dump_pe(pid, image_base, oep,
+                                                TMP_FILE_PATH)
+                if not dump_success:
+                    LOG.error("Failed to dump PE")
+                    continue
+
+                LOG.info("Fixing dump ...")
+                output_file_name = f"{main_module_name}.dump"
+                pyscylla.fix_iat(pid, iat_info[0], iat_info[1], TMP_FILE_PATH,
+                                 output_file_name)
+            LOG.info(f"Output file has been saved at '{output_file_name}'")
 
 
 def find_iat(frida_rpc: frida.core.ScriptExports,
@@ -162,7 +187,7 @@ def unwrap_iat(frida_rpc: frida.core.ScriptExports, iat_range: Tuple[int, int],
     iat_start = iat_range[0]
     iat_end = iat_range[0] + iat_range[1]
     new_iat_data = bytearray()
-    LOG.info("Fixing IAT ...")
+    LOG.info("Unwrapping the IAT ...")
     for current_page_addr in range(iat_start, iat_end, process_info.page_size):
         data = frida_rpc.read_process_memory(current_page_addr,
                                              process_info.page_size)
