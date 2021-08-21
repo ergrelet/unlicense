@@ -13,10 +13,12 @@ import frida  # type: ignore
 import frida.core  # type: ignore
 import pyscylla  # type: ignore
 from unicorn import (  # type: ignore
-    Uc, UcError, UC_ARCH_X86, UC_MODE_32, UC_PROT_READ, UC_PROT_WRITE,
-    UC_PROT_ALL, UC_HOOK_MEM_UNMAPPED, UC_HOOK_BLOCK)
+    Uc, UcError, UC_ARCH_X86, UC_MODE_32, UC_MODE_64, UC_PROT_READ,
+    UC_PROT_WRITE, UC_PROT_ALL, UC_HOOK_MEM_UNMAPPED, UC_HOOK_BLOCK)
 from unicorn.x86_const import (  # type: ignore
-    UC_X86_REG_ESP, UC_X86_REG_EBP, UC_X86_REG_EIP)
+    UC_X86_REG_ESP, UC_X86_REG_EBP, UC_X86_REG_EIP, UC_X86_REG_RSP,
+    UC_X86_REG_RBP, UC_X86_REG_RIP, UC_X86_REG_MSR, UC_X86_REG_GS,
+    UC_X86_REG_FS)
 
 LOG = logging.getLogger("unlicense")
 
@@ -132,9 +134,14 @@ def interactive_mode(script: frida.core.Script,
 
                 LOG.info("Fixing dump ...")
                 output_file_name = f"{main_module_name}.dump"
-                pyscylla.fix_iat(pid, iat_info[0], iat_info[1], TMP_FILE_PATH,
-                                 output_file_name)
-            LOG.info(f"Output file has been saved at '{output_file_name}'")
+                try:
+                    pyscylla.fix_iat(pid, iat_info[0], iat_info[1],
+                                     TMP_FILE_PATH, output_file_name)
+                except pyscylla.ScyllaException as e:
+                    LOG.error(f"Failed to fix IAT: {e}")
+                    continue
+
+                LOG.info(f"Output file has been saved at '{output_file_name}'")
 
 
 def find_iat(frida_rpc: frida.core.ScriptExports,
@@ -220,6 +227,19 @@ def resolve_wrapped_api(frida_rpc: frida.core.ScriptExports,
     if arch == "ia32":
         uc_arch = UC_ARCH_X86
         uc_mode = UC_MODE_32
+        pc_register = UC_X86_REG_EIP
+        sp_register = UC_X86_REG_ESP
+        bp_register = UC_X86_REG_EBP
+        stack_addr = 0xff000000
+        setup_teb = setup_teb_x86
+    elif arch == "x64":
+        uc_arch = UC_ARCH_X86
+        uc_mode = UC_MODE_64
+        pc_register = UC_X86_REG_RIP
+        sp_register = UC_X86_REG_RSP
+        bp_register = UC_X86_REG_RBP
+        stack_addr = 0xff00000000000000
+        setup_teb = setup_teb_x64
     else:
         raise NotImplementedError(f"Architecture '{arch}' isn't supported")
 
@@ -227,12 +247,14 @@ def resolve_wrapped_api(frida_rpc: frida.core.ScriptExports,
         uc = Uc(uc_arch, uc_mode)
 
         # Setup a stack
-        stack_addr = 0x1000
-        stack_size = 0x2000
-        stack_start = stack_addr + stack_size // 2
+        stack_size = 3 * process_info.page_size
+        stack_start = stack_addr + stack_size - process_info.page_size
         uc.mem_map(stack_addr, stack_size, UC_PROT_READ | UC_PROT_WRITE)
-        uc.reg_write(UC_X86_REG_ESP, stack_start)
-        uc.reg_write(UC_X86_REG_EBP, stack_start)
+        uc.reg_write(sp_register, stack_start)
+        uc.reg_write(bp_register, stack_start)
+
+        # Setup FS/GSBASE
+        setup_teb(uc, process_info)
 
         # Setup hooks
         uc.hook_add(UC_HOOK_MEM_UNMAPPED,
@@ -244,18 +266,31 @@ def resolve_wrapped_api(frida_rpc: frida.core.ScriptExports,
 
         uc.emu_start(wrapper_start_addr, wrapper_start_addr + 20)
 
-        # Read EIP
-        eip: int = uc.reg_read(UC_X86_REG_EIP)
-        return eip
+        # Read and return PC
+        return uc.reg_read(pc_register)
     except UcError as e:
-        LOG.debug("ERROR: %s" % e)
-        eip = uc.reg_read(UC_X86_REG_EIP)
-        esp = uc.reg_read(UC_X86_REG_ESP)
-        ebp = uc.reg_read(UC_X86_REG_EBP)
-        LOG.debug(f"EIP={eip:x}")
-        LOG.debug(f"ESP={esp:x}")
-        LOG.debug(f"EBP={ebp:x}")
+        LOG.debug(f"ERROR: {e}")
+        pc = uc.reg_read(pc_register)
+        sp = uc.reg_read(sp_register)
+        bp = uc.reg_read(bp_register)
+        LOG.debug(f"PC=0x{pc:x}")
+        LOG.debug(f"SP=0x{sp:x}")
+        LOG.debug(f"BP=0x{bp:x}")
         return None
+
+
+def setup_teb_x86(uc: Uc, process_info: ProcessInfo) -> None:
+    MSG_IA32_FS_BASE = 0xC0000100
+    teb_addr = 0xff100000
+    uc.mem_map(teb_addr, process_info.page_size, UC_PROT_READ | UC_PROT_WRITE)
+    uc.reg_write(UC_X86_REG_MSR, (MSG_IA32_FS_BASE, teb_addr))
+
+
+def setup_teb_x64(uc: Uc, process_info: ProcessInfo) -> None:
+    MSG_IA32_GS_BASE = 0xC0000101
+    teb_addr = 0xff10000000000000
+    uc.mem_map(teb_addr, process_info.page_size, UC_PROT_READ | UC_PROT_WRITE)
+    uc.reg_write(UC_X86_REG_MSR, (MSG_IA32_GS_BASE, teb_addr))
 
 
 def unicorn_hook_unmapped(
@@ -267,14 +302,18 @@ def unicorn_hook_unmapped(
 
     frida_rpc, page_size = user_data
     aligned_addr = address - (address & (page_size - 1))
-    in_process_data = frida_rpc.read_process_memory(aligned_addr, page_size)
     try:
+        in_process_data = frida_rpc.read_process_memory(
+            aligned_addr, page_size)
         uc.mem_map(aligned_addr, len(in_process_data), UC_PROT_ALL)
         uc.mem_write(aligned_addr, in_process_data)
         LOG.debug(f"Mapped {len(in_process_data)} bytes at 0x{aligned_addr:x}")
         return True
     except UcError as e:
-        LOG.error("ERROR: %s" % e)
+        LOG.error(f"ERROR: {e}")
+        return False
+    except frida.core.RPCException as e:
+        LOG.error(f"ERROR: {e}")
         return False
 
 

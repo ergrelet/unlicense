@@ -4,7 +4,7 @@ function log(message) {
     console.log(`frida-agent: ${message}`);
 }
 
-function walk_back_oep(context, module) {
+function walk_back_stack_for_oep(context, module) {
     const module_image_start = module.base;
     const module_image_end = module.base.add(module.size);
     let backtrace = Thread.backtrace(context, Backtracer.ACCURATE);
@@ -15,6 +15,27 @@ function walk_back_oep(context, module) {
         }
     });
     return oep_candidate;
+}
+
+function compute_real_oep(oep_candidate) {
+    if (Process.arch == "ia32") {
+        // Note: This assumes the OEP looks like this (MSVC) and `oep_candidate`
+        // is located after the call:
+        //   call __security_init_cookie
+        //   jmp __tmainCRTStartup
+        return oep_candidate.sub(5);
+    } else if (Process.arch == "x64") {
+        // Note: This assumes the OEP looks like this (MSVC) and `oep_candidate`
+        // is located after the call:
+        //   sub rsp, 0x28
+        //   call __security_init_cookie
+        //   add rsp, 0x28
+        //   jmp __tmainCRTStartup
+        return oep_candidate.sub(9);
+    } else {
+        // FIXME
+        return oep_candidate;
+    }
 }
 
 // Define available RPCs
@@ -31,13 +52,12 @@ rpc.exports = {
         const RtlQueryPerformanceCounter = Module.findExportByName('ntdll', 'RtlQueryPerformanceCounter')
         Interceptor.attach(RtlQueryPerformanceCounter, {
             onEnter: function (_args) {
-                let oep_candidate = walk_back_oep(this.context, dumped_module);
+                let oep_candidate = walk_back_stack_for_oep(this.context, dumped_module);
                 if (oep_candidate != null) {
-                    // FIXME: This assumes a `call rel32` was used.
-                    oep_candidate = oep_candidate.sub(5);
+                    oep_candidate = compute_real_oep(oep_candidate);
                     const OEP_RVA = oep_candidate.sub(dumped_module.base);
                     const continue_event = `continue_${this.threadId}`;
-                    log(`Possible OEP: ${oep_candidate} (RVA: ${OEP_RVA})`);
+                    log(`Possible OEP (thread #${this.threadId}): ${oep_candidate} (RVA: ${OEP_RVA})`);
                     send({ 'event': 'possible OEP', 'OEP': oep_candidate, 'OEP_RVA': OEP_RVA, 'continue_event': continue_event })
                     let sync_op = recv(continue_event, function (_value) { });
                     sync_op.wait();
