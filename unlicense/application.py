@@ -149,6 +149,7 @@ def find_iat(frida_rpc: frida.core.ScriptExports,
         range_size = r["size"]
         data = frida_rpc.read_process_memory(
             range_base_addr, min(range_size, process_info.page_size))
+        LOG.debug(f"Looking for the IAT at 0x{range_base_addr:x}")
         if looks_like_iat(data, exports_set, process_info):
             return range_base_addr, range_size
     return None
@@ -158,7 +159,7 @@ def looks_like_iat(data: bytes, exports: Set[int],
                    process_info: ProcessInfo) -> bool:
     ptr_format = pointer_size_to_fmt(process_info.pointer_size)
     elem_count = min(100, len(data) // process_info.pointer_size)
-    required_valid_elements = 1 + (elem_count * 0.15)
+    required_valid_elements = int(1 + (elem_count * 0.04))
     data_size = elem_count * process_info.pointer_size
     valid_ptr_count = 0
     for i in range(0, data_size, process_info.pointer_size):
@@ -166,7 +167,9 @@ def looks_like_iat(data: bytes, exports: Set[int],
                             data[i:i + process_info.pointer_size])[0]
         if ptr in exports:
             valid_ptr_count += 1
-    if valid_ptr_count > required_valid_elements:
+
+    LOG.debug(f"Valid APIs count: {valid_ptr_count}")
+    if valid_ptr_count >= required_valid_elements:
         return True
     return False
 
