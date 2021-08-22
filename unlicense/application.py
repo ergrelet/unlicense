@@ -11,6 +11,8 @@ from typing import (List, Tuple, Callable, Dict, Any, Optional, Set)
 
 import frida  # type: ignore
 import frida.core  # type: ignore
+import lief  # type: ignore
+import lief.PE  # type: ignore
 import pyscylla  # type: ignore
 from unicorn import (  # type: ignore
     Uc, UcError, UC_ARCH_X86, UC_MODE_32, UC_MODE_64, UC_PROT_READ,
@@ -145,6 +147,7 @@ def interactive_mode(script: frida.core.Script,
                     LOG.error(f"Failed to fix IAT: {e}")
                     continue
 
+                rebuild_pe(output_file_name)
                 LOG.info(f"Output file has been saved at '{output_file_name}'")
 
 
@@ -298,6 +301,47 @@ def setup_teb_x64(uc: Uc, process_info: ProcessInfo) -> None:
     teb_addr = 0xff10000000000000
     uc.mem_map(teb_addr, process_info.page_size, UC_PROT_READ | UC_PROT_WRITE)
     uc.reg_write(UC_X86_REG_MSR, (MSG_IA32_GS_BASE, teb_addr))
+
+
+def rebuild_pe(pe_file_path: str) -> None:
+    binary = lief.parse(pe_file_path)
+    # Rename sections
+    resolve_section_names(binary)
+    # Disable ASLR
+    binary.optional_header.dll_characteristics &= ~lief.PE.DLL_CHARACTERISTICS.DYNAMIC_BASE
+    # Rebuild PE
+    builder = lief.PE.Builder(binary)
+    builder.build_dos_stub(True)
+    builder.build_overlay(True)
+    builder.build()
+    builder.write(pe_file_path)
+
+    # Determine the actual PE raw size
+    highest_section = binary.sections[0]
+    for section in binary.sections:
+        if section.offset > highest_section.offset:
+            highest_section = section
+    pe_size = highest_section.offset + highest_section.size
+
+    # Truncate file
+    with open(pe_file_path, "ab") as f:
+        f.truncate(pe_size)
+
+
+def resolve_section_names(binary: lief.Binary) -> None:
+    for data_dir in binary.data_directories:
+        if data_dir.type == lief.PE.DATA_DIRECTORY.RESOURCE_TABLE:
+            LOG.debug(
+                f".rsrc section found (RVA=0x{data_dir.section.virtual_address:x})"
+            )
+            data_dir.section.name = ".rsrc"
+
+    ep = binary.optional_header.addressof_entrypoint
+    for section in binary.sections:
+        if ep >= section.virtual_address and ep < section.virtual_address + section.virtual_size:
+            LOG.debug(
+                f".text section found (RVA=0x{section.virtual_address:x})")
+            section.name = ".text"
 
 
 def unicorn_hook_unmapped(
