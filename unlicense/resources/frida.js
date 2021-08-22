@@ -48,20 +48,16 @@ rpc.exports = {
         }
 
         log(`Setting up OEP tracing for "${module_name}"`);
-        let OEPs = new Set();
         const RtlQueryPerformanceCounter = Module.findExportByName('ntdll', 'RtlQueryPerformanceCounter')
         Interceptor.attach(RtlQueryPerformanceCounter, {
             onEnter: function (_args) {
                 let oep_candidate = walk_back_stack_for_oep(this.context, dumped_module);
                 if (oep_candidate != null) {
                     oep_candidate = compute_real_oep(oep_candidate);
-                    const OEP_RVA = oep_candidate.sub(dumped_module.base);
-                    const continue_event = `continue_${this.threadId}`;
-                    log(`Possible OEP (thread #${this.threadId}): ${oep_candidate} (RVA: ${OEP_RVA})`);
-                    send({ 'event': 'possible OEP', 'OEP': oep_candidate, 'OEP_RVA': OEP_RVA, 'continue_event': continue_event })
-                    let sync_op = recv(continue_event, function (_value) { });
+                    log(`Possible OEP (thread #${this.threadId}): ${oep_candidate}`);
+                    send({ 'event': 'oep_reached', 'OEP': oep_candidate, 'BASE': dumped_module.base })
+                    let sync_op = recv('block_on_oep', function (_value) { });
                     sync_op.wait();
-                    OEPs.add('' + oep_candidate);
                 }
             }
         });

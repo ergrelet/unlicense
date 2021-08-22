@@ -3,6 +3,7 @@ import functools
 import os
 import struct
 import sys
+import threading
 from importlib import resources
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -26,8 +27,9 @@ LOG = logging.getLogger("unlicense")
 
 
 class ProcessInfo:
-    def __init__(self, main_module_name: str, architecture: str,
+    def __init__(self, pid: int, main_module_name: str, architecture: str,
                  pointer_size: int, page_size: int):
+        self.pid = pid
         self.main_module_name = main_module_name
         self.architecture = architecture
         self.pointer_size = pointer_size
@@ -46,37 +48,58 @@ def main() -> int:
         LOG.error(f"'{exe_path}' isn't a file or doesn't exist")
         return 2
 
-    main_module_name = exe_path.name
-    pid, session, script, continue_events = frida_spawn_instrument(exe_path)
+    dumped_image_base = 0
+    dumped_oep = 0
+    oep_reached = threading.Event()
+
+    def notify_oep_reached(image_base: int, oep: int) -> None:
+        nonlocal dumped_image_base
+        nonlocal dumped_oep
+        dumped_image_base = image_base
+        dumped_oep = oep
+        oep_reached.set()
+
+    session, script, process_info = frida_spawn_instrument(
+        exe_path, notify_oep_reached)
     try:
-        interactive_mode(script, continue_events, pid, main_module_name)
+        oep_reached.wait()
+
+        # Start dumping
+        LOG.info(
+            f"OEP reached: OEP=0x{dumped_oep:x} BASE=0x{dumped_image_base:x})")
+        frida_rpc = script.exports
+        dump_pe(frida_rpc, process_info, dumped_image_base, dumped_oep)
     finally:
+        frida.kill(process_info.pid)
         session.detach()
 
     return 0
 
 
 def frida_spawn_instrument(
-    exe_path: Path
-) -> Tuple[int, frida.core.Session, frida.core.Script, List[Tuple[str, str,
-                                                                  str]]]:
-    continue_events: List[Tuple[str, str, str]] = []
+    exe_path: Path, notify_oep_reached: Callable[[int, int], None]
+) -> Tuple[frida.core.Session, frida.core.Script, ProcessInfo]:
+    main_module_name = exe_path.name
     pid: int = frida.spawn((str(exe_path), ))
     session = frida.attach(pid)
     frida_js = resources.open_text("unlicense.resources", "frida.js").read()
     script = session.create_script(frida_js)
-    on_message_callback = functools.partial(frida_callback, continue_events)
+    on_message_callback = functools.partial(frida_callback, notify_oep_reached)
     script.on('message', on_message_callback)
     script.load()
 
     frida_rpc = script.exports
+    process_info = ProcessInfo(pid, main_module_name,
+                               frida_rpc.get_architecture(),
+                               frida_rpc.get_pointer_size(),
+                               frida_rpc.get_page_size())
     frida_rpc.setup_oep_tracing(exe_path.name)
     frida.resume(pid)
 
-    return pid, session, script, continue_events
+    return session, script, process_info
 
 
-def frida_callback(continue_events: List[Tuple[str, str, str]],
+def frida_callback(notify_oep_reached: Callable[[int, int], None],
                    message: Dict[str, Any], _data: Any) -> None:
     msg_type = message['type']
     if msg_type == 'error':
@@ -87,68 +110,49 @@ def frida_callback(continue_events: List[Tuple[str, str, str]],
     if msg_type == 'send':
         payload = message['payload']
         event = payload.get('event', '')
-        if event == 'possible OEP':
-            continue_events.append((payload['OEP'], payload['OEP_RVA'],
-                                    payload['continue_event']))
-            LOG.info(
-                f"We reached the OEP ({payload['OEP']}-{payload['OEP_RVA']}), "
-                "you can now start to dump by pressing 'd' (or press 'r' to resume the process)"
-            )
+        if event == 'oep_reached':
+            # Note: We cannot use RPCs in `on_message` callbacks, so we have to
+            # delay the actual dumping.
+            notify_oep_reached(int(payload['BASE'], 16),
+                               int(payload['OEP'], 16))
             return
 
     raise NotImplementedError('Unknown message received')
 
 
-def interactive_mode(script: frida.core.Script,
-                     continue_events: List[Tuple[str, str, str]], pid: int,
-                     main_module_name: str) -> None:
-    frida_rpc = script.exports
-    cmd = ''
-    while cmd != 'q':
-        cmd = sys.stdin.readline().strip().lower()
-        if cmd == 'r':
-            for code in continue_events:
-                script.post({'type': code})
-        if cmd == "d":
-            oep_s, eop_rva_s, _ = continue_events[0]
-            oep = int(oep_s, 16)
-            oep_rva = int(eop_rva_s, 16)
-            image_base = oep - oep_rva
-            process_info = ProcessInfo(main_module_name,
-                                       frida_rpc.get_architecture(),
-                                       frida_rpc.get_pointer_size(),
-                                       frida_rpc.get_page_size())
-            iat_info = find_iat(frida_rpc, process_info)
-            if iat_info is None:
-                LOG.error("IAT not found")
-                continue
+def dump_pe(frida_rpc: frida.core.ScriptExports, process_info: ProcessInfo,
+            image_base: int, oep: int) -> None:
+    iat_info = find_iat(frida_rpc, process_info)
+    if iat_info is None:
+        LOG.error("IAT not found")
+        return
 
-            LOG.info(f"IAT found: 0x{iat_info[0]:x}")
-            iat_size = unwrap_iat(frida_rpc, iat_info, process_info)
-            if iat_size is None:
-                LOG.error("IAT unwrapping failed")
-                continue
+    LOG.info(f"IAT found: 0x{iat_info[0]:x}")
+    iat_size = unwrap_iat(frida_rpc, iat_info, process_info)
+    if iat_size is None:
+        LOG.error("IAT unwrapping failed")
+        return
 
-            LOG.info(f"Dumping PE with OEP=0x{oep:x} ...")
-            with TemporaryDirectory() as tmp_dir:
-                TMP_FILE_PATH = os.path.join(tmp_dir, "unlicense.tmp")
-                dump_success = pyscylla.dump_pe(pid, image_base, oep,
-                                                TMP_FILE_PATH)
-                if not dump_success:
-                    LOG.error("Failed to dump PE")
-                    continue
+    LOG.info(f"Dumping PE with OEP=0x{oep:x} ...")
+    with TemporaryDirectory() as tmp_dir:
+        TMP_FILE_PATH = os.path.join(tmp_dir, "unlicense.tmp")
+        dump_success = pyscylla.dump_pe(process_info.pid, image_base, oep,
+                                        TMP_FILE_PATH)
+        if not dump_success:
+            LOG.error("Failed to dump PE")
+            return
 
-                LOG.info("Fixing dump ...")
-                output_file_name = f"unpacked_{main_module_name}"
-                try:
-                    pyscylla.fix_iat(pid, iat_info[0], iat_size, TMP_FILE_PATH,
-                                     output_file_name)
-                except pyscylla.ScyllaException as e:
-                    LOG.error(f"Failed to fix IAT: {e}")
-                    continue
+        LOG.info("Fixing dump ...")
+        output_file_name = f"unpacked_{process_info.main_module_name}"
+        try:
+            pyscylla.fix_iat(process_info.pid, iat_info[0], iat_size,
+                             TMP_FILE_PATH, output_file_name)
+        except pyscylla.ScyllaException as e:
+            LOG.error(f"Failed to fix IAT: {e}")
+            return
 
-                rebuild_pe(output_file_name)
-                LOG.info(f"Output file has been saved at '{output_file_name}'")
+        rebuild_pe(output_file_name)
+        LOG.info(f"Output file has been saved at '{output_file_name}'")
 
 
 def find_iat(frida_rpc: frida.core.ScriptExports,
