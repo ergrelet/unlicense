@@ -122,7 +122,11 @@ def interactive_mode(script: frida.core.Script,
                 continue
 
             LOG.info(f"IAT found: 0x{iat_info[0]:x}")
-            unwrap_iat(frida_rpc, iat_info, process_info)
+            iat_size = unwrap_iat(frida_rpc, iat_info, process_info)
+            if iat_size is None:
+                LOG.error("IAT unwrapping failed")
+                continue
+
             LOG.info(f"Dumping PE with OEP=0x{oep:x} ...")
             with TemporaryDirectory() as tmp_dir:
                 TMP_FILE_PATH = os.path.join(tmp_dir, "unlicense.tmp")
@@ -133,10 +137,10 @@ def interactive_mode(script: frida.core.Script,
                     continue
 
                 LOG.info("Fixing dump ...")
-                output_file_name = f"{main_module_name}.dump"
+                output_file_name = f"unpacked_{main_module_name}"
                 try:
-                    pyscylla.fix_iat(pid, iat_info[0], iat_info[1],
-                                     TMP_FILE_PATH, output_file_name)
+                    pyscylla.fix_iat(pid, iat_info[0], iat_size, TMP_FILE_PATH,
+                                     output_file_name)
                 except pyscylla.ScyllaException as e:
                     LOG.error(f"Failed to fix IAT: {e}")
                     continue
@@ -182,7 +186,7 @@ def looks_like_iat(data: bytes, exports: Set[int],
 
 
 def unwrap_iat(frida_rpc: frida.core.ScriptExports, iat_range: Tuple[int, int],
-               process_info: ProcessInfo) -> None:
+               process_info: ProcessInfo) -> Optional[int]:
     ptr_format = pointer_size_to_fmt(process_info.pointer_size)
     ranges = frida_rpc.enumerate_module_ranges(process_info.main_module_name)
 
@@ -211,12 +215,14 @@ def unwrap_iat(frida_rpc: frida.core.ScriptExports, iat_range: Tuple[int, int],
                     LOG.info(f"IAT fixed: size=0x{len(new_iat_data):x}")
                     frida_rpc.write_process_memory(iat_range[0],
                                                    list(new_iat_data))
-                    return
+                    return len(new_iat_data)
                 LOG.debug(
                     f"Resolved API: 0x{wrapper_start:x} -> 0x{resolved_api:x}")
                 new_iat_data += struct.pack(ptr_format, resolved_api)
             else:
                 new_iat_data += struct.pack(ptr_format, wrapper_start)
+
+    return None
 
 
 def resolve_wrapped_api(frida_rpc: frida.core.ScriptExports,
@@ -267,7 +273,8 @@ def resolve_wrapped_api(frida_rpc: frida.core.ScriptExports,
         uc.emu_start(wrapper_start_addr, wrapper_start_addr + 20)
 
         # Read and return PC
-        return uc.reg_read(pc_register)
+        pc: int = uc.reg_read(pc_register)
+        return pc
     except UcError as e:
         LOG.debug(f"ERROR: {e}")
         pc = uc.reg_read(pc_register)
