@@ -8,7 +8,7 @@ import fire  # type: ignore
 import frida  # type: ignore
 
 from . import frida_exec, winlicense3
-from .process_control import ProcessInfo
+from .process_control import ProcessController
 
 LOG = logging.getLogger("unlicense")
 
@@ -45,7 +45,7 @@ def run_unlicense(exe_to_dump: str,
         dumped_oep = oep
         oep_reached.set()
 
-    session, script, process_info = frida_exec.spawn_and_instrument(
+    process_controller = frida_exec.spawn_and_instrument(
         exe_path, notify_oep_reached)
     try:
         oep_reached.wait()
@@ -55,8 +55,6 @@ def run_unlicense(exe_to_dump: str,
         if force_oep is not None:
             dumped_oep = dumped_image_base + force_oep
             LOG.info(f"Using given OEP RVA value instead (0x{force_oep:x})")
-        winlicense3.dump_pe(script.exports, process_info, dumped_image_base,
-                            dumped_oep)
+        winlicense3.dump_pe(process_controller, dumped_image_base, dumped_oep)
     finally:
-        frida.kill(process_info.pid)
-        session.detach()
+        process_controller.terminate_process()
