@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "unlicense"
 version = "0.1.0"
-description = "Unpack executables protected with WinLicense"
+description = "Unpack executables protected with WinLicense/Themida"
 authors = ["Erwan Grelet"]
 license = "GPL-3.0-or-later"
 
@@ -11,6 +11,7 @@ frida = "^15.0"
 unicorn = "^1.0"
 pyscylla = "^1.0"
 lief = "^0.11"
+fire = "^0.4"
 
 [tool.poetry.dev-dependencies]
 mypy = "^0.910"

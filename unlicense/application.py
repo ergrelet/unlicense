@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 from time import sleep
 from typing import (List, Tuple, Callable, Dict, Any, Optional, Set)
 
+import fire  # type: ignore
 import frida  # type: ignore
 import frida.core  # type: ignore
 import lief  # type: ignore
@@ -36,17 +37,26 @@ class ProcessInfo:
         self.page_size = page_size
 
 
-def main() -> int:
-    logging.basicConfig(level=logging.INFO)
+def main() -> None:
+    fire.Fire(run_unlicense)
 
-    if len(sys.argv) < 2:
-        LOG.error("Missing positional argument EXE_PATH")
-        return 1
 
-    exe_path = Path(sys.argv[1])
+def run_unlicense(exe_to_dump: str,
+                  verbose: bool = False,
+                  force_oep: Optional[int] = None) -> None:
+    """
+    Unpack executables protected with WinLicense/Themida.
+    """
+    if verbose:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+    logging.basicConfig(level=log_level)
+
+    exe_path = Path(exe_to_dump)
     if not exe_path.is_file():
         LOG.error(f"'{exe_path}' isn't a file or doesn't exist")
-        return 2
+        sys.exit(1)
 
     dumped_image_base = 0
     dumped_oep = 0
@@ -63,17 +73,16 @@ def main() -> int:
         exe_path, notify_oep_reached)
     try:
         oep_reached.wait()
-
         # Start dumping
         LOG.info(
             f"OEP reached: OEP=0x{dumped_oep:x} BASE=0x{dumped_image_base:x})")
-        frida_rpc = script.exports
-        dump_pe(frida_rpc, process_info, dumped_image_base, dumped_oep)
+        if force_oep is not None:
+            dumped_oep = dumped_image_base + force_oep
+            LOG.info(f"Using given OEP RVA value instead (0x{force_oep:x})")
+        dump_pe(script.exports, process_info, dumped_image_base, dumped_oep)
     finally:
         frida.kill(process_info.pid)
         session.detach()
-
-    return 0
 
 
 def frida_spawn_instrument(
