@@ -19,6 +19,7 @@ def main() -> None:
 
 def run_unlicense(exe_to_dump: str,
                   verbose: bool = False,
+                  pause_on_oep: bool = False,
                   force_oep: Optional[int] = None) -> None:
     """
     Unpack executables protected with WinLicense/Themida.
@@ -52,6 +53,9 @@ def run_unlicense(exe_to_dump: str,
         # Start dumping
         LOG.info(
             f"OEP reached: OEP=0x{dumped_oep:x} BASE=0x{dumped_image_base:x})")
+        if pause_on_oep:
+            input("Thread blocked, press any key to proceed with the dumping.")
+
         if force_oep is not None:
             dumped_oep = dumped_image_base + force_oep
             LOG.info(f"Using given OEP RVA value instead (0x{force_oep:x})")
