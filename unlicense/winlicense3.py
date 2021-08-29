@@ -16,6 +16,7 @@ from unicorn.x86_const import (  # type: ignore
 from .dump_utils import rebuild_pe, pointer_size_to_fmt
 from .process_control import ProcessController
 
+MAGIC_STACK_RET_ADDR = 0xdeadbeef
 LOG = logging.getLogger(__name__)
 
 
@@ -60,9 +61,7 @@ def _find_iat(
     LOG.debug(f"Exports count: {len(exports)}")
 
     exports_set = {int(e["address"], 16) for e in exports}
-    ranges = process_controller.enumerate_module_ranges(
-        process_controller.main_module_name)
-    for r in ranges:
+    for r in process_controller.main_module_ranges:
         range_base_addr = int(r["base"], 16)
         range_size = r["size"]
         data = process_controller.read_process_memory(
@@ -118,7 +117,7 @@ def _unwrap_iat(iat_range: Tuple[int, int],
             wrapper_start = struct.unpack(
                 ptr_format, data[i:i + process_controller.pointer_size])[0]
             if in_module(wrapper_start):
-                resolved_api = _resolve_wrapped_api(wrapper_start, ranges,
+                resolved_api = _resolve_wrapped_api(wrapper_start,
                                                     process_controller)
                 if resolved_api is None:
                     LOG.info(f"IAT fixed: size=0x{len(new_iat_data):x}")
@@ -135,7 +134,7 @@ def _unwrap_iat(iat_range: Tuple[int, int],
 
 
 def _resolve_wrapped_api(
-        wrapper_start_addr: int, main_module_ranges: List[Dict[str, Any]],
+        wrapper_start_addr: int,
         process_controller: ProcessController) -> Optional[int]:
     arch = process_controller.architecture
     if arch == "ia32":
@@ -164,6 +163,10 @@ def _resolve_wrapped_api(
         stack_size = 3 * process_controller.page_size
         stack_start = stack_addr + stack_size - process_controller.page_size
         uc.mem_map(stack_addr, stack_size, UC_PROT_READ | UC_PROT_WRITE)
+        uc.mem_write(
+            stack_start + process_controller.pointer_size,
+            struct.pack(pointer_size_to_fmt(process_controller.pointer_size),
+                        MAGIC_STACK_RET_ADDR))
         uc.reg_write(sp_register, stack_start)
         uc.reg_write(bp_register, stack_start)
 
@@ -176,7 +179,7 @@ def _resolve_wrapped_api(
                     user_data=process_controller)
         uc.hook_add(UC_HOOK_BLOCK,
                     _unicorn_hook_block,
-                    user_data=main_module_ranges)
+                    user_data=process_controller)
 
         uc.emu_start(wrapper_start_addr, wrapper_start_addr + 20)
 
@@ -197,14 +200,28 @@ def _resolve_wrapped_api(
 def _setup_teb_x86(uc: Uc, process_info: ProcessController) -> None:
     MSG_IA32_FS_BASE = 0xC0000100
     teb_addr = 0xff100000
+    peb_addr = 0xff200000
+    # Map tables
     uc.mem_map(teb_addr, process_info.page_size, UC_PROT_READ | UC_PROT_WRITE)
+    uc.mem_map(peb_addr, process_info.page_size, UC_PROT_READ | UC_PROT_WRITE)
+    uc.mem_write(teb_addr + 0x18, struct.pack(pointer_size_to_fmt(4),
+                                              teb_addr))
+    uc.mem_write(teb_addr + 0x30, struct.pack(pointer_size_to_fmt(4),
+                                              peb_addr))
     uc.reg_write(UC_X86_REG_MSR, (MSG_IA32_FS_BASE, teb_addr))
 
 
 def _setup_teb_x64(uc: Uc, process_info: ProcessController) -> None:
     MSG_IA32_GS_BASE = 0xC0000101
     teb_addr = 0xff10000000000000
+    peb_addr = 0xff20000000000000
+    # Map tables
     uc.mem_map(teb_addr, process_info.page_size, UC_PROT_READ | UC_PROT_WRITE)
+    uc.mem_map(peb_addr, process_info.page_size, UC_PROT_READ | UC_PROT_WRITE)
+    uc.mem_write(teb_addr + 0x30, struct.pack(pointer_size_to_fmt(8),
+                                              teb_addr))
+    uc.mem_write(teb_addr + 0x60, struct.pack(pointer_size_to_fmt(8),
+                                              peb_addr))
     uc.reg_write(UC_X86_REG_MSR, (MSG_IA32_GS_BASE, teb_addr))
 
 
@@ -227,17 +244,44 @@ def _unicorn_hook_unmapped(uc: Uc, _access: Any, address: int, _size: int,
     except UcError as e:
         LOG.error(f"ERROR: {e}")
         return False
+    except Exception as e:
+        LOG.error(f"ERROR: {e}")
+        return False
 
 
 def _unicorn_hook_block(uc: Uc, address: int, _size: int,
-                        ranges: List[Dict[str, Any]]) -> None:
+                        process_controller: ProcessController) -> None:
     def in_module(address: int) -> bool:
-        for r in ranges:
+        for r in process_controller.main_module_ranges:
             range_base_addr = int(r["base"], 16)
             range_size = r["size"]
             if address >= range_base_addr and address < range_base_addr + range_size:
                 return True
         return False
 
+    ptr_size = process_controller.pointer_size
+    arch = process_controller.architecture
+    if arch == "ia32":
+        pc_register = UC_X86_REG_EIP
+        sp_register = UC_X86_REG_ESP
+    elif arch == "x64":
+        pc_register = UC_X86_REG_RIP
+        sp_register = UC_X86_REG_RSP
+
     if not in_module(address):
-        uc.emu_stop()
+        sp = uc.reg_read(sp_register)
+        ret_addr_data = uc.mem_read(sp + ptr_size, ptr_size)
+        ret_addr = struct.unpack(pointer_size_to_fmt(ptr_size),
+                                 ret_addr_data)[0]
+        if ret_addr == MAGIC_STACK_RET_ADDR:
+            # Most wrappers should end up here directly
+            uc.emu_stop()
+        else:
+            pc = uc.reg_read(pc_register)
+            LOG.debug(f"API call from IAT wrapper: PC=0x{pc:x}")
+            # Note: Dirty fix for ExitProcess-like wrappers
+            try:
+                _value = uc.mem_read(ret_addr, ptr_size)
+            except UcError as e:
+                LOG.debug("Invalid return address, stopping emulation")
+                uc.emu_stop()

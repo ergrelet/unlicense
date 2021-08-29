@@ -20,20 +20,25 @@ class FridaProcessController(ProcessController):
         frida_rpc = frida_script.exports
         super().__init__(pid, main_module_name, frida_rpc.get_architecture(),
                          frida_rpc.get_pointer_size(),
-                         frida_rpc.get_page_size())
+                         frida_rpc.get_page_size(),
+                         frida_rpc.enumerate_module_ranges(main_module_name))
         self._frida_rpc = frida_rpc
         self._frida_session = frida_session
 
     def enumerate_module_ranges(self,
                                 module_name: str) -> List[Dict[str, Any]]:
-        return self._frida_rpc.enumerate_module_ranges(module_name)
+        value: List[Dict[str, Any]] = self._frida_rpc.enumerate_module_ranges(
+            module_name)
+        return value
 
     def enumerate_exported_functions(self) -> List[Dict[str, Any]]:
-        return self._frida_rpc.enumerate_exported_functions()
+        value: List[Dict[
+            str, Any]] = self._frida_rpc.enumerate_exported_functions()
+        return value
 
     def read_process_memory(self, address: int, size: int) -> bytes:
         try:
-            return self._frida_rpc.read_process_memory(address, size)
+            return bytes(self._frida_rpc.read_process_memory(address, size))
         except frida.core.RPCException as e:
             LOG.error(f"read_process_memory failed: {e}")
             # TODO: Replace with a dedicated exception
