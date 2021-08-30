@@ -1,5 +1,7 @@
 "use strict";
 
+let allocated_buffers = [];
+
 function log(message) {
     console.log(`frida-agent: ${message}`);
 }
@@ -79,6 +81,15 @@ rpc.exports = {
             exports = exports.concat(module.enumerateExports());
         });
         return exports;
+    },
+    allocateProcessMemory: function (size, near) {
+        let size_rounded = size + (Process.pageSize - size % Process.pageSize);
+        let addr = Memory.alloc(size_rounded, { near: ptr(near), maxDistance: 0xff000000 });
+        allocated_buffers.push(addr)
+        return addr;
+    },
+    queryMemoryProtection: function (address) {
+        return Process.getRangeByAddress(ptr(address))['protection'];
     },
     readProcessMemory: function (address, size) {
         return Memory.readByteArray(ptr(address), size);

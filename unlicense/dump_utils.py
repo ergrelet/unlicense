@@ -1,12 +1,55 @@
 import logging
+import os
+from tempfile import TemporaryDirectory
 
 import lief  # type: ignore
 import lief.PE  # type: ignore
+import pyscylla  # type: ignore
+
+from .process_control import ProcessController
 
 LOG = logging.getLogger(__name__)
 
 
-def rebuild_pe(pe_file_path: str) -> None:
+def dump_pe(
+    process_controller: ProcessController,
+    pe_file_path: str,
+    image_base: int,
+    oep: int,
+    iat_addr: int,
+    iat_size: int,
+    add_new_iat: bool,
+) -> bool:
+    with TemporaryDirectory() as tmp_dir:
+        TMP_FILE_PATH = os.path.join(tmp_dir, "unlicense.tmp")
+        dump_success = pyscylla.dump_pe(process_controller.pid, image_base,
+                                        oep, TMP_FILE_PATH, pe_file_path)
+        if not dump_success:
+            LOG.error("Failed to dump PE")
+            return False
+
+        LOG.info("Fixing dump ...")
+        output_file_name = f"unpacked_{process_controller.main_module_name}"
+        try:
+            pyscylla.fix_iat(process_controller.pid, iat_addr, iat_size,
+                             add_new_iat, TMP_FILE_PATH, output_file_name)
+        except pyscylla.ScyllaException as e:
+            LOG.error(f"Failed to fix IAT: {e}")
+            return False
+
+        rebuild_success = pyscylla.rebuild_pe(output_file_name, False, True,
+                                              False)
+        if not dump_success:
+            LOG.error("Failed to rebuild PE (with Scylla)")
+            return False
+
+        _rebuild_pe(output_file_name)
+        LOG.info(f"Output file has been saved at '{output_file_name}'")
+
+    return True
+
+
+def _rebuild_pe(pe_file_path: str) -> None:
     binary = lief.parse(pe_file_path)
     # Rename sections
     _resolve_section_names(binary)

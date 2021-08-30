@@ -24,6 +24,8 @@ class FridaProcessController(ProcessController):
                          frida_rpc.enumerate_module_ranges(main_module_name))
         self._frida_rpc = frida_rpc
         self._frida_session = frida_session
+        self._exported_functions_cache: Optional[Dict[int, Dict[str,
+                                                                Any]]] = None
 
     def enumerate_module_ranges(self,
                                 module_name: str) -> List[Dict[str, Any]]:
@@ -31,10 +33,24 @@ class FridaProcessController(ProcessController):
             module_name)
         return value
 
-    def enumerate_exported_functions(self) -> List[Dict[str, Any]]:
-        value: List[Dict[
-            str, Any]] = self._frida_rpc.enumerate_exported_functions()
-        return value
+    def enumerate_exported_functions(self,
+                                     update_cache: bool = False
+                                     ) -> Dict[int, Dict[str, Any]]:
+        if self._exported_functions_cache is None or update_cache:
+            value: List[Dict[
+                str, Any]] = self._frida_rpc.enumerate_exported_functions()
+            exports_dict = {int(e["address"], 16): e for e in value}
+            self._exported_functions_cache = exports_dict
+            return exports_dict
+        return self._exported_functions_cache
+
+    def allocate_process_memory(self, size: int, near: int) -> int:
+        buffer_addr = self._frida_rpc.allocate_process_memory(size, near)
+        return int(buffer_addr, 16)
+
+    def query_memory_protection(self, address: int) -> str:
+        protection: str = self._frida_rpc.query_memory_protection(address)
+        return protection
 
     def read_process_memory(self, address: int, size: int) -> bytes:
         try:

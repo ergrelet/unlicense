@@ -20,7 +20,17 @@ class ProcessController(abc.ABC):
         raise NotImplemented
 
     @abc.abstractmethod
-    def enumerate_exported_functions(self) -> List[Dict[str, Any]]:
+    def enumerate_exported_functions(self,
+                                     update_cache: bool = False
+                                     ) -> Dict[int, Dict[str, Any]]:
+        raise NotImplemented
+
+    @abc.abstractmethod
+    def allocate_process_memory(self, size: int, near: int) -> int:
+        raise NotImplemented
+
+    @abc.abstractmethod
+    def query_memory_protection(self, address: int) -> str:
         raise NotImplemented
 
     @abc.abstractmethod
