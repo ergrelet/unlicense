@@ -7,66 +7,49 @@ from typing import (List, Tuple, Callable, Dict, Any, Optional, Set)
 import lief  # type: ignore
 import pyscylla  # type: ignore
 
-from .dump_utils import rebuild_pe, pointer_size_to_fmt
+from .dump_utils import dump_pe, pointer_size_to_fmt
 from .emulation import resolve_wrapped_api
 from .process_control import ProcessController
 
 LOG = logging.getLogger(__name__)
 
 
-def dump_pe(process_controller: ProcessController, image_base: int,
-            oep: int) -> None:
+def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
+                    image_base: int, oep: int) -> None:
     iat_info = _find_iat(process_controller)
     if iat_info is None:
         LOG.error("IAT not found")
         return
 
-    LOG.info(f"IAT found: 0x{iat_info[0]:x}")
+    iat_addr = iat_info[0]
+    LOG.info(f"IAT found: 0x{iat_addr:x}")
     iat_size = _unwrap_iat(iat_info, process_controller)
     if iat_size is None:
         LOG.error("IAT unwrapping failed")
         return
 
     LOG.info(f"Dumping PE with OEP=0x{oep:x} ...")
-    with TemporaryDirectory() as tmp_dir:
-        TMP_FILE_PATH = os.path.join(tmp_dir, "unlicense.tmp")
-        dump_success = pyscylla.dump_pe(process_controller.pid, image_base,
-                                        oep, TMP_FILE_PATH)
-        if not dump_success:
-            LOG.error("Failed to dump PE")
-            return
-
-        LOG.info("Fixing dump ...")
-        output_file_name = f"unpacked_{process_controller.main_module_name}"
-        try:
-            pyscylla.fix_iat(process_controller.pid, iat_info[0], iat_size,
-                             TMP_FILE_PATH, output_file_name)
-        except pyscylla.ScyllaException as e:
-            LOG.error(f"Failed to fix IAT: {e}")
-            return
-
-        rebuild_pe(output_file_name)
-        LOG.info(f"Output file has been saved at '{output_file_name}'")
+    dump_pe(process_controller, pe_file_path, image_base, oep, iat_addr,
+            iat_size, False)
 
 
 def _find_iat(
         process_controller: ProcessController) -> Optional[Tuple[int, int]]:
-    exports = process_controller.enumerate_exported_functions()
-    LOG.debug(f"Exports count: {len(exports)}")
+    exports_dict = process_controller.enumerate_exported_functions()
+    LOG.debug(f"Exports count: {len(exports_dict)}")
 
-    exports_set = {int(e["address"], 16) for e in exports}
     for r in process_controller.main_module_ranges:
         range_base_addr = int(r["base"], 16)
         range_size = r["size"]
         data = process_controller.read_process_memory(
             range_base_addr, min(range_size, process_controller.page_size))
         LOG.debug(f"Looking for the IAT at 0x{range_base_addr:x}")
-        if _looks_like_iat(data, exports_set, process_controller):
+        if _looks_like_iat(data, exports_dict, process_controller):
             return range_base_addr, range_size
     return None
 
 
-def _looks_like_iat(data: bytes, exports: Set[int],
+def _looks_like_iat(data: bytes, exports: Dict[int, Dict[str, Any]],
                     process_controller: ProcessController) -> bool:
     ptr_format = pointer_size_to_fmt(process_controller.pointer_size)
     elem_count = min(100, len(data) // process_controller.pointer_size)
