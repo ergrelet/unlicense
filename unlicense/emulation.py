@@ -8,7 +8,8 @@ from unicorn import (  # type: ignore
     UC_HOOK_CODE)
 from unicorn.x86_const import (  # type: ignore
     UC_X86_REG_ESP, UC_X86_REG_EBP, UC_X86_REG_EIP, UC_X86_REG_RSP,
-    UC_X86_REG_RBP, UC_X86_REG_RIP, UC_X86_REG_MSR)
+    UC_X86_REG_RBP, UC_X86_REG_RIP, UC_X86_REG_MSR, UC_X86_REG_EAX,
+    UC_X86_REG_RAX)
 
 from .dump_utils import pointer_size_to_fmt
 from .process_control import ProcessController
@@ -28,6 +29,7 @@ def resolve_wrapped_api(
         pc_register = UC_X86_REG_EIP
         sp_register = UC_X86_REG_ESP
         bp_register = UC_X86_REG_EBP
+        result_register = UC_X86_REG_EAX
         stack_addr = 0xff000000
         setup_teb = _setup_teb_x86
     elif arch == "x64":
@@ -36,6 +38,7 @@ def resolve_wrapped_api(
         pc_register = UC_X86_REG_RIP
         sp_register = UC_X86_REG_RSP
         bp_register = UC_X86_REG_RBP
+        result_register = UC_X86_REG_RAX
         stack_addr = 0xff00000000000000
         setup_teb = _setup_teb_x64
     else:
@@ -43,6 +46,11 @@ def resolve_wrapped_api(
 
     try:
         uc = Uc(uc_arch, uc_mode)
+
+        # Map fake return address's page in case wrappers try to access it
+        aligned_addr = STACK_MAGIC_RET_ADDR - (STACK_MAGIC_RET_ADDR %
+                                               process_controller.page_size)
+        uc.mem_map(aligned_addr, process_controller.page_size, UC_PROT_ALL)
 
         # Setup a stack
         stack_size = 3 * process_controller.page_size
@@ -73,7 +81,7 @@ def resolve_wrapped_api(
         uc.emu_start(wrapper_start_addr, wrapper_start_addr + 1024)
 
         # Read and return PC
-        pc: int = uc.reg_read(pc_register)
+        pc: int = uc.reg_read(result_register)
         return pc
     except UcError as e:
         LOG.debug(f"ERROR: {e}")
@@ -146,25 +154,38 @@ def _unicorn_hook_block(uc: Uc, address: int, _size: int,
     if arch == "ia32":
         pc_register = UC_X86_REG_EIP
         sp_register = UC_X86_REG_ESP
+        result_register = UC_X86_REG_EAX
     elif arch == "x64":
         pc_register = UC_X86_REG_RIP
         sp_register = UC_X86_REG_RSP
+        result_register = UC_X86_REG_RAX
 
     exports_dict = process_controller.enumerate_exported_functions()
-    if address in exports_dict:
+    if _is_at_exported_function_entry(address, exports_dict):
         # Reached an export or returned to the call site
         sp = uc.reg_read(sp_register)
         ret_addr_data = uc.mem_read(sp, ptr_size)
         ret_addr = struct.unpack(pointer_size_to_fmt(ptr_size),
                                  ret_addr_data)[0]
         LOG.debug(f"Reached API '{exports_dict[address]['name']}'")
-        if ret_addr == stop_on_ret_addr or ret_addr == STACK_MAGIC_RET_ADDR:
+        if ret_addr == stop_on_ret_addr or \
+            ret_addr == stop_on_ret_addr + 1 \
+                or ret_addr == STACK_MAGIC_RET_ADDR:
             # Most wrappers should end up here directly
+            uc.reg_write(result_register, address)
             uc.emu_stop()
-        elif _is_no_return_api(exports_dict[address]["name"]):
+            return
+        if _is_no_return_api(exports_dict[address]["name"]):
             # Note: Dirty fix for ExitProcess-like wrappers on WinLicense 3.x
             LOG.debug("Reached noreturn API, stopping emulation")
+            uc.reg_write(result_register, address)
             uc.emu_stop()
+            return
+
+
+def _is_at_exported_function_entry(
+        address: int, exports_dict: Dict[int, Dict[str, Any]]) -> bool:
+    return address in exports_dict
 
 
 def _is_no_return_api(api_name: str) -> bool:

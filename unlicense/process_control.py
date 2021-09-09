@@ -1,6 +1,6 @@
 import abc
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 
 class ProcessController(abc.ABC):
@@ -13,6 +13,18 @@ class ProcessController(abc.ABC):
         self.pointer_size = pointer_size
         self.page_size = page_size
         self.main_module_ranges = main_module_ranges
+
+    @abc.abstractmethod
+    def find_module_by_address(self, address: int) -> Optional[Dict[str, Any]]:
+        raise NotImplemented
+
+    @abc.abstractmethod
+    def find_range_by_address(self, address: int) -> Optional[Dict[str, Any]]:
+        raise NotImplemented
+
+    @abc.abstractmethod
+    def enumerate_modules(self) -> List[str]:
+        raise NotImplemented
 
     @abc.abstractmethod
     def enumerate_module_ranges(self,

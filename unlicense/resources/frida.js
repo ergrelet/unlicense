@@ -7,12 +7,27 @@ function log(message) {
 }
 
 function walk_back_stack_for_oep(context, module) {
-    const module_image_start = module.base;
-    const module_image_end = module.base.add(module.size);
-    let backtrace = Thread.backtrace(context, Backtracer.ACCURATE);
+    const backtrace = Thread.backtrace(context, Backtracer.FUZZY);
+    if (backtrace.length == 0) {
+        return null;
+    }
+
+    const original_text_section = Process.findRangeByAddress(backtrace[0]);
+    if (original_text_section == null) {
+        return null;
+    }
+
+    const module_start = module.base;
+    const module_end = module.base.add(module.size);
+    if (module_start.compare(original_text_section.base) > 0 || module_end.compare(original_text_section.base) <= 0) {
+        return null;
+    }
+
     let oep_candidate = null;
+    const text_section_start = original_text_section.base;
+    const text_section_end = original_text_section.base.add(original_text_section.size);
     backtrace.forEach(addr => {
-        if (module_image_start.compare(addr) <= 0 && module_image_end.compare(addr) > 0) {
+        if (text_section_start.compare(addr) <= 0 && text_section_end.compare(addr) > 0) {
             oep_candidate = addr;
         }
     });
@@ -67,11 +82,27 @@ rpc.exports = {
     getArchitecture: function () { return Process.arch; },
     getPointerSize: function () { return Process.pointerSize; },
     getPageSize: function () { return Process.pageSize; },
+    findModuleByAddress: function (address) {
+        let module = Process.findModuleByAddress(ptr(address));
+        return module == null ? undefined : module;
+    },
+    findRangeByAddress: function (address) {
+        let range = Process.findRangeByAddress(ptr(address));
+        return range == null ? undefined : range;
+    },
+    enumerateModules: function () {
+        const modules = Process.enumerateModules();
+        let module_names = [];
+        modules.forEach(module => {
+            module_names = module_names.concat(module.name);
+        });
+        return module_names;
+    },
     enumerateModuleRanges: function (module_name) {
         let ranges = Process.enumerateRangesSync("r--");
         return ranges.filter(range => {
             const module = Process.findModuleByAddress(range.base);
-            return module != null && module.name.localeCompare(module_name) == 0;
+            return module != null && module.name.toUpperCase() == module_name.toUpperCase();
         });
     },
     enumerateExportedFunctions: function () {

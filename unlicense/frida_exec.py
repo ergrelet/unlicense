@@ -27,6 +27,20 @@ class FridaProcessController(ProcessController):
         self._exported_functions_cache: Optional[Dict[int, Dict[str,
                                                                 Any]]] = None
 
+    def find_module_by_address(self, address: int) -> Optional[Dict[str, Any]]:
+        value: Optional[Dict[
+            str, Any]] = self._frida_rpc.find_module_by_address(address)
+        return value
+
+    def find_range_by_address(self, address: int) -> Optional[Dict[str, Any]]:
+        value: Optional[Dict[
+            str, Any]] = self._frida_rpc.find_range_by_address(address)
+        return value
+
+    def enumerate_modules(self) -> List[str]:
+        value: List[str] = self._frida_rpc.enumerate_modules()
+        return value
+
     def enumerate_module_ranges(self,
                                 module_name: str) -> List[Dict[str, Any]]:
         value: List[Dict[str, Any]] = self._frida_rpc.enumerate_module_ranges(
@@ -56,7 +70,6 @@ class FridaProcessController(ProcessController):
         try:
             return bytes(self._frida_rpc.read_process_memory(address, size))
         except frida.core.RPCException as e:
-            LOG.error(f"read_process_memory failed: {e}")
             # TODO: Replace with a dedicated exception
             raise Exception from e
 
@@ -64,7 +77,6 @@ class FridaProcessController(ProcessController):
         try:
             self._frida_rpc.write_process_memory(address, data)
         except frida.core.RPCException as e:
-            LOG.error(f"write_process_memory failed: {e}")
             # TODO: Replace with a dedicated exception
             raise Exception from e
 
