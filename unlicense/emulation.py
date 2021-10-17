@@ -1,18 +1,17 @@
 import logging
 import struct
-from typing import (List, Tuple, Callable, Dict, Any, Optional, Set)
+from typing import (Tuple, Any, Optional)
 
 from unicorn import (  # type: ignore
     Uc, UcError, UC_ARCH_X86, UC_MODE_32, UC_MODE_64, UC_PROT_READ,
-    UC_PROT_WRITE, UC_PROT_ALL, UC_HOOK_MEM_UNMAPPED, UC_HOOK_BLOCK,
-    UC_HOOK_CODE)
+    UC_PROT_WRITE, UC_PROT_ALL, UC_HOOK_MEM_UNMAPPED, UC_HOOK_BLOCK)
 from unicorn.x86_const import (  # type: ignore
     UC_X86_REG_ESP, UC_X86_REG_EBP, UC_X86_REG_EIP, UC_X86_REG_RSP,
     UC_X86_REG_RBP, UC_X86_REG_RIP, UC_X86_REG_MSR, UC_X86_REG_EAX,
     UC_X86_REG_RAX)
 
 from .dump_utils import pointer_size_to_fmt
-from .process_control import ProcessController
+from .process_control import ProcessController, Architecture
 
 STACK_MAGIC_RET_ADDR = 0xdeadbeef
 LOG = logging.getLogger(__name__)
@@ -23,7 +22,7 @@ def resolve_wrapped_api(
         process_controller: ProcessController,
         expected_ret_addr: Optional[int] = None) -> Optional[int]:
     arch = process_controller.architecture
-    if arch == "ia32":
+    if arch == Architecture.X86_32:
         uc_arch = UC_ARCH_X86
         uc_mode = UC_MODE_32
         pc_register = UC_X86_REG_EIP
@@ -32,7 +31,7 @@ def resolve_wrapped_api(
         result_register = UC_X86_REG_EAX
         stack_addr = 0xff000000
         setup_teb = _setup_teb_x86
-    elif arch == "x64":
+    elif arch == Architecture.X86_64:
         uc_arch = UC_ARCH_X86
         uc_mode = UC_MODE_64
         pc_register = UC_X86_REG_RIP
@@ -84,13 +83,13 @@ def resolve_wrapped_api(
         pc: int = uc.reg_read(result_register)
         return pc
     except UcError as e:
-        LOG.debug(f"ERROR: {e}")
+        LOG.debug("ERROR: %s", str(e))
         pc = uc.reg_read(pc_register)
         sp = uc.reg_read(sp_register)
         bp = uc.reg_read(bp_register)
-        LOG.debug(f"PC=0x{pc:x}")
-        LOG.debug(f"SP=0x{sp:x}")
-        LOG.debug(f"BP=0x{bp:x}")
+        LOG.debug("PC=%s", hex(pc))
+        LOG.debug("SP=%s", hex(sp))
+        LOG.debug("BP=%s", hex(bp))
         return None
 
 
@@ -125,7 +124,7 @@ def _setup_teb_x64(uc: Uc, process_info: ProcessController) -> None:
 def _unicorn_hook_unmapped(uc: Uc, _access: Any, address: int, _size: int,
                            _value: int,
                            process_controller: ProcessController) -> bool:
-    LOG.debug("Unmapped memory at 0x{:x}".format(address))
+    LOG.debug("Unmapped memory at %s", hex(address))
     if address == 0:
         return False
 
@@ -136,13 +135,14 @@ def _unicorn_hook_unmapped(uc: Uc, _access: Any, address: int, _size: int,
             aligned_addr, page_size)
         uc.mem_map(aligned_addr, len(in_process_data), UC_PROT_ALL)
         uc.mem_write(aligned_addr, in_process_data)
-        LOG.debug(f"Mapped {len(in_process_data)} bytes at 0x{aligned_addr:x}")
+        LOG.debug("Mapped %d bytes at %s", len(in_process_data),
+                  hex(aligned_addr))
         return True
     except UcError as e:
-        LOG.error(f"ERROR: {e}")
+        LOG.error("ERROR: %s", str(e))
         return False
     except Exception as e:
-        LOG.error(f"ERROR: {e}")
+        LOG.error("ERROR: %s", str(e))
         return False
 
 
@@ -151,23 +151,21 @@ def _unicorn_hook_block(uc: Uc, address: int, _size: int,
     process_controller, stop_on_ret_addr = user_data
     ptr_size = process_controller.pointer_size
     arch = process_controller.architecture
-    if arch == "ia32":
-        pc_register = UC_X86_REG_EIP
+    if arch == Architecture.X86_32:
         sp_register = UC_X86_REG_ESP
         result_register = UC_X86_REG_EAX
-    elif arch == "x64":
-        pc_register = UC_X86_REG_RIP
+    elif arch == Architecture.X86_64:
         sp_register = UC_X86_REG_RSP
         result_register = UC_X86_REG_RAX
 
     exports_dict = process_controller.enumerate_exported_functions()
-    if _is_at_exported_function_entry(address, exports_dict):
+    if address in exports_dict:
         # Reached an export or returned to the call site
         sp = uc.reg_read(sp_register)
         ret_addr_data = uc.mem_read(sp, ptr_size)
         ret_addr = struct.unpack(pointer_size_to_fmt(ptr_size),
                                  ret_addr_data)[0]
-        LOG.debug(f"Reached API '{exports_dict[address]['name']}'")
+        LOG.debug("Reached API '%s'", exports_dict[address]['name'])
         if ret_addr == stop_on_ret_addr or \
             ret_addr == stop_on_ret_addr + 1 \
                 or ret_addr == STACK_MAGIC_RET_ADDR:
@@ -181,11 +179,6 @@ def _unicorn_hook_block(uc: Uc, address: int, _size: int,
             uc.reg_write(result_register, address)
             uc.emu_stop()
             return
-
-
-def _is_at_exported_function_entry(
-        address: int, exports_dict: Dict[int, Dict[str, Any]]) -> bool:
-    return address in exports_dict
 
 
 def _is_no_return_api(api_name: str) -> bool:

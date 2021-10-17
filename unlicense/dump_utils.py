@@ -34,17 +34,17 @@ def dump_pe(
             pyscylla.fix_iat(process_controller.pid, iat_addr, iat_size,
                              add_new_iat, TMP_FILE_PATH, output_file_name)
         except pyscylla.ScyllaException as e:
-            LOG.error(f"Failed to fix IAT: {e}")
+            LOG.error("Failed to fix IAT: %s", str(e))
             return False
 
         rebuild_success = pyscylla.rebuild_pe(output_file_name, False, True,
                                               False)
-        if not dump_success:
+        if not rebuild_success:
             LOG.error("Failed to rebuild PE (with Scylla)")
             return False
 
         _rebuild_pe(output_file_name)
-        LOG.info(f"Output file has been saved at '{output_file_name}'")
+        LOG.info("Output file has been saved at '%s'", output_file_name)
 
     return True
 
@@ -77,16 +77,15 @@ def _rebuild_pe(pe_file_path: str) -> None:
 def _resolve_section_names(binary: lief.Binary) -> None:
     for data_dir in binary.data_directories:
         if data_dir.type == lief.PE.DATA_DIRECTORY.RESOURCE_TABLE:
-            LOG.debug(
-                f".rsrc section found (RVA=0x{data_dir.section.virtual_address:x})"
-            )
+            LOG.debug(".rsrc section found (RVA=%s)",
+                      hex(data_dir.section.virtual_address))
             data_dir.section.name = ".rsrc"
 
     ep = binary.optional_header.addressof_entrypoint
     for section in binary.sections:
         if ep >= section.virtual_address and ep < section.virtual_address + section.virtual_size:
-            LOG.debug(
-                f".text section found (RVA=0x{section.virtual_address:x})")
+            LOG.debug(".text section found (RVA=%s)",
+                      hex(section.virtual_address))
             section.name = ".text"
 
 

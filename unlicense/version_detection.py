@@ -1,7 +1,9 @@
-import logging
 from typing import Optional
 
 import lief  # type: ignore
+
+THEMIDA2_IMPORTED_MODS = ["kernel32.dll", "comctl32.dll"]
+THEMIDA2_IMPORTED_FUNCS = ["lstrcpy", "InitCommonControls"]
 
 
 def detect_winlicense_version(pe_file_path: str) -> Optional[int]:
@@ -26,9 +28,6 @@ def detect_winlicense_version(pe_file_path: str) -> Optional[int]:
 
     # Version 2.x
     if len(binary.imports) == 2 and len(binary.imported_functions) == 2:
-        THEMIDA2_IMPORTED_MODS = ["kernel32.dll", "comctl32.dll"]
-        THEMIDA2_IMPORTED_FUNCS = ["lstrcpy", "InitCommonControls"]
-
         if binary.imports[0].name in THEMIDA2_IMPORTED_MODS and \
            binary.imports[1].name in THEMIDA2_IMPORTED_MODS and \
            binary.imported_functions[0].name in THEMIDA2_IMPORTED_FUNCS and \

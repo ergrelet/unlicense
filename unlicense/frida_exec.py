@@ -1,14 +1,14 @@
-import abc
 import functools
 import logging
 from importlib import resources
 from pathlib import Path
-from typing import (List, Tuple, Callable, Dict, Any, Optional, Set)
+from typing import (List, Callable, Dict, Any, Optional)
 
 import frida  # type: ignore
 import frida.core  # type: ignore
 
-from .process_control import ProcessController
+from .process_control import (ProcessController, Architecture, MemoryRange,
+                              ReadProcessMemoryError, WriteProcessMemoryError)
 
 LOG = logging.getLogger(__name__)
 
@@ -18,10 +18,14 @@ class FridaProcessController(ProcessController):
                  frida_session: frida.core.Session,
                  frida_script: frida.core.Script):
         frida_rpc = frida_script.exports
-        super().__init__(pid, main_module_name, frida_rpc.get_architecture(),
+
+        # Initialize ProcessController
+        super().__init__(pid, main_module_name,
+                         _str_to_architecture(frida_rpc.get_architecture()),
                          frida_rpc.get_pointer_size(),
-                         frida_rpc.get_page_size(),
-                         frida_rpc.enumerate_module_ranges(main_module_name))
+                         frida_rpc.get_page_size())
+
+        # Initialize FridaProcessController specifics
         self._frida_rpc = frida_rpc
         self._frida_session = frida_session
         self._exported_functions_cache: Optional[Dict[int, Dict[str,
@@ -32,20 +36,30 @@ class FridaProcessController(ProcessController):
             str, Any]] = self._frida_rpc.find_module_by_address(address)
         return value
 
-    def find_range_by_address(self, address: int) -> Optional[Dict[str, Any]]:
+    def find_range_by_address(
+            self,
+            address: int,
+            include_data: bool = False) -> Optional[MemoryRange]:
         value: Optional[Dict[
             str, Any]] = self._frida_rpc.find_range_by_address(address)
-        return value
+        if value is None:
+            return None
+        return self._frida_range_to_mem_range(value, include_data)
 
     def enumerate_modules(self) -> List[str]:
         value: List[str] = self._frida_rpc.enumerate_modules()
         return value
 
-    def enumerate_module_ranges(self,
-                                module_name: str) -> List[Dict[str, Any]]:
+    def enumerate_module_ranges(
+            self,
+            module_name: str,
+            include_data: bool = False) -> List[MemoryRange]:
+        convert_range = lambda r: self._frida_range_to_mem_range(
+            r, include_data)
+
         value: List[Dict[str, Any]] = self._frida_rpc.enumerate_module_ranges(
             module_name)
-        return value
+        return list(map(convert_range, value))
 
     def enumerate_exported_functions(self,
                                      update_cache: bool = False
@@ -70,19 +84,37 @@ class FridaProcessController(ProcessController):
         try:
             return bytes(self._frida_rpc.read_process_memory(address, size))
         except frida.core.RPCException as e:
-            # TODO: Replace with a dedicated exception
-            raise Exception from e
+            raise ReadProcessMemoryError from e
 
     def write_process_memory(self, address: int, data: List[int]) -> None:
         try:
             self._frida_rpc.write_process_memory(address, data)
         except frida.core.RPCException as e:
-            # TODO: Replace with a dedicated exception
-            raise Exception from e
+            raise WriteProcessMemoryError from e
 
     def terminate_process(self) -> None:
         frida.kill(self.pid)
         self._frida_session.detach()
+
+    def _frida_range_to_mem_range(self, r: Dict[str, Any],
+                                  with_data: bool) -> MemoryRange:
+        base = int(r["base"], 16)
+        size = r["size"]
+        data = None
+        if with_data:
+            data = self.read_process_memory(base, size)
+        return MemoryRange(base=base,
+                           size=size,
+                           protection=r["protection"],
+                           data=data)
+
+
+def _str_to_architecture(frida_arch: str) -> Architecture:
+    if frida_arch == "ia32":
+        return Architecture.X86_32
+    if frida_arch == "x64":
+        return Architecture.X86_64
+    raise ValueError
 
 
 def spawn_and_instrument(

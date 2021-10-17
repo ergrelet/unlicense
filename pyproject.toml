@@ -17,6 +17,7 @@ xxhash = "^2.0"
 
 [tool.poetry.dev-dependencies]
 mypy = "^0.910"
+pylint = "^2.11"
 
 [tool.poetry.scripts]
 unlicense = 'unlicense.application:main'
@@ -24,3 +25,7 @@ unlicense = 'unlicense.application:main'
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pylint.'MESSAGES CONTROL']
+max-line-length = 120
+disable = "C0114, C0115, C0116, I1101"
