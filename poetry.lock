@@ -140,6 +140,14 @@ toml = ">=0.7.1"
 typing-extensions = {version = ">=3.10.0", markers = "python_version < \"3.10\""}
 
 [[package]]
+name = "pyscylla"
+version = "0.10.0"
+description = "Python bindings for Scylla"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "six"
 version = "1.16.0"
 description = "Python 2 and 3 compatibility utilities"
@@ -198,7 +206,7 @@ python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "3e3ab5861da4c9e0d4b4b34560b3719186890d333a7be7f7b1d5e8baf9678364"
+content-hash = "86a2178cbf6d68f0260e96f0fdfd4d43d4f3ad038ab5d38778624df93651650c"
 
 [metadata.files]
 astroid = [
@@ -335,6 +343,14 @@ platformdirs = [
 pylint = [
     {file = "pylint-2.11.1-py3-none-any.whl", hash = "sha256:0f358e221c45cbd4dad2a1e4b883e75d28acdcccd29d40c76eb72b307269b126"},
     {file = "pylint-2.11.1.tar.gz", hash = "sha256:2c9843fff1a88ca0ad98a256806c82c5a8f86086e7ccbdb93297d86c3f90c436"},
+]
+pyscylla = [
+    {file = "pyscylla-0.10.0-cp37-cp37m-win32.whl", hash = "sha256:4beb5c34304cda895235cbadbafd73552b7798c0284a5f3702ee5b10794b62ef"},
+    {file = "pyscylla-0.10.0-cp37-cp37m-win_amd64.whl", hash = "sha256:a346ade035ea9083c055df2578fc278d7b4fef6d2fb62dceb65480295c12a7b9"},
+    {file = "pyscylla-0.10.0-cp38-cp38-win32.whl", hash = "sha256:722481bf7f7b4825bf57e03e626eba7c70113c536c57ea7202e723029e953415"},
+    {file = "pyscylla-0.10.0-cp38-cp38-win_amd64.whl", hash = "sha256:a188cb6887b82e58a9dc288e192d75af5fff458c522cc3b22f2fe50a543077a9"},
+    {file = "pyscylla-0.10.0-cp39-cp39-win32.whl", hash = "sha256:3f8e750945951c28f89be8fe393b6a9a3880c0db8145bbfcf545e4f90207166f"},
+    {file = "pyscylla-0.10.0-cp39-cp39-win_amd64.whl", hash = "sha256:3f5b2439ead87f4840fc064e209453b783c34254cf559c9514595334641f009a"},
 ]
 six = [
     {file = "six-1.16.0-py2.py3-none-any.whl", hash = "sha256:8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254"},

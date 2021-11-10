@@ -9,11 +9,11 @@ license = "GPL-3.0-or-later"
 python = "^3.8"
 frida = "^15.0"
 unicorn = "^1.0"
-pyscylla = "^1.0"
 lief = "^0.11"
 fire = "^0.4"
 capstone = "^4.0"
 xxhash = "^2.0"
+pyscylla = "^0.10.0"
 
 [tool.poetry.dev-dependencies]
 mypy = "^0.910"
