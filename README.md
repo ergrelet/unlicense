@@ -6,6 +6,8 @@ WinLicense/Themida 2.x and 3.x.
 Warning: This tool will execute the target executable. Make sure to use this
 tool in a VM if you're unsure about what the target executable does.
 
+Note: You need to use a 32-bit Python interpreter to dump 32-bit executables.
+
 ## Features
 
 * Handles Themida/Winlicense 2.x and 3.x
