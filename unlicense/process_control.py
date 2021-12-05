@@ -74,6 +74,11 @@ class ProcessController(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
+    def set_memory_protection(self, address: int, size: int,
+                              protection: str) -> bool:
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def read_process_memory(self, address: int, size: int) -> bytes:
         raise NotImplementedError
 

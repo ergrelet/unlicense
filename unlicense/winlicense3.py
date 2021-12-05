@@ -115,6 +115,10 @@ def _unwrap_iat(
                 if resolved_api is None:
                     # Truncate the IAT before the last null pointer
                     new_iat_data = new_iat_data[:last_nullptr_offset]
+                    # Ensure the range is writable
+                    process_controller.set_memory_protection(
+                        iat_range.base, len(new_iat_data), "rw-")
+                    # Update IAT
                     process_controller.write_process_memory(
                         iat_range.base, list(new_iat_data))
                     return len(new_iat_data), resolved_import_count

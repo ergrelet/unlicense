@@ -80,6 +80,12 @@ class FridaProcessController(ProcessController):
         protection: str = self._frida_rpc.query_memory_protection(address)
         return protection
 
+    def set_memory_protection(self, address: int, size: int,
+                              protection: str) -> bool:
+        result: bool = self._frida_rpc.set_memory_protection(
+            address, size, protection)
+        return result
+
     def read_process_memory(self, address: int, size: int) -> bytes:
         try:
             return bytes(self._frida_rpc.read_process_memory(address, size))

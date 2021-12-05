@@ -122,6 +122,9 @@ rpc.exports = {
     queryMemoryProtection: function (address) {
         return Process.getRangeByAddress(ptr(address))['protection'];
     },
+    setMemoryProtection: function (address, size, protection) {
+        return Memory.protect(ptr(address), size, protection);
+    },
     readProcessMemory: function (address, size) {
         return Memory.readByteArray(ptr(address), size);
     },
