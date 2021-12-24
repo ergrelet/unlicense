@@ -1,4 +1,4 @@
-# Unlicense
+# Unlicense [![](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 
 A Python 3 tool to dynamically unpack executables protected with
 WinLicense/Themida 2.x and 3.x.
