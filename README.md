@@ -29,7 +29,7 @@ Note: You need to use a 32-bit Python interpreter to dump 32-bit executables.
 
 ```
 $ git clone https://github.com/ergrelet/unlicense.git
-$ python install unlicense/
+$ pip install unlicense/
 ```
 
 ### Use

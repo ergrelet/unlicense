@@ -11,6 +11,8 @@ from .process_control import (ProcessController, Architecture, MemoryRange,
                               ReadProcessMemoryError, WriteProcessMemoryError)
 
 LOG = logging.getLogger(__name__)
+# See issue #7: messages cannot exceed 128MiB
+MAX_DATA_CHUNK_SIZE = 64 * 1024 * 1024
 
 
 class FridaProcessController(ProcessController):
@@ -87,8 +89,14 @@ class FridaProcessController(ProcessController):
         return result
 
     def read_process_memory(self, address: int, size: int) -> bytes:
+        read_data = bytearray()
         try:
-            return bytes(self._frida_rpc.read_process_memory(address, size))
+            for offset in range(0, size, MAX_DATA_CHUNK_SIZE):
+                chunk_size = min(MAX_DATA_CHUNK_SIZE, size - offset)
+                read_data += bytearray(
+                    self._frida_rpc.read_process_memory(
+                        address + offset, chunk_size))
+            return bytes(read_data)
         except frida.core.RPCException as e:
             raise ReadProcessMemoryError from e
 
