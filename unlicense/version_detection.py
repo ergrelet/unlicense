@@ -34,5 +34,14 @@ def detect_winlicense_version(pe_file_path: str) -> Optional[int]:
            binary.imported_functions[1].name in THEMIDA2_IMPORTED_FUNCS:
             return 2
 
+    # These x86 instructions are always present at the beginning of a section
+    # in Themida/WinLicense 2.x
+    instr_pattern = [
+        0x56, 0x50, 0x53, 0xE8, 0x01, 0x00, 0x00, 0x00, 0xCC, 0x58
+    ]
+    for section in binary.sections:
+        if instr_pattern == section.content[:len(instr_pattern)]:
+            return 2
+
     # Failed to automatically detect version
     return None
