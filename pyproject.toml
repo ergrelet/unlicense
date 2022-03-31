@@ -18,6 +18,8 @@ pyscylla = "^0.10.0"
 [tool.poetry.dev-dependencies]
 mypy = "^0.910"
 pylint = "^2.11"
+yapf = "^0.32.0"
+toml = "^0.10.2"
 
 [tool.poetry.scripts]
 unlicense = 'unlicense.application:main'
