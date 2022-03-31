@@ -9,6 +9,7 @@ class Architecture(enum.Enum):
 
 
 class MemoryRange:
+
     def __init__(self,
                  base: int,
                  size: int,
@@ -27,6 +28,7 @@ class MemoryRange:
 
 
 class ProcessController(abc.ABC):
+
     def __init__(self, pid: int, main_module_name: str,
                  architecture: Architecture, pointer_size: int,
                  page_size: int):
@@ -100,6 +102,10 @@ class ProcessController(abc.ABC):
 
 
 class ProcessControllerException(Exception):
+    pass
+
+
+class QueryProcessMemoryError(ProcessControllerException):
     pass
 
 

@@ -5,6 +5,7 @@
 - Fix IAT patching in some cases for Themida/Winlicense 3.x
 - Fix inability to read remote chunks of memory bigger than 128 MiB
 - Improve version detection to handle packed Delphi executables
+- Improve IAT search algorithm for Themida/Winlicense 3.x
 
 ## [0.1.0] - 2021-11-13
 

@@ -8,7 +8,8 @@ import frida  # type: ignore
 import frida.core  # type: ignore
 
 from .process_control import (ProcessController, Architecture, MemoryRange,
-                              ReadProcessMemoryError, WriteProcessMemoryError)
+                              QueryProcessMemoryError, ReadProcessMemoryError,
+                              WriteProcessMemoryError)
 
 LOG = logging.getLogger(__name__)
 # See issue #7: messages cannot exceed 128MiB
@@ -16,6 +17,7 @@ MAX_DATA_CHUNK_SIZE = 64 * 1024 * 1024
 
 
 class FridaProcessController(ProcessController):
+
     def __init__(self, pid: int, main_module_name: str,
                  frida_session: frida.core.Session,
                  frida_script: frida.core.Script):
@@ -79,8 +81,11 @@ class FridaProcessController(ProcessController):
         return int(buffer_addr, 16)
 
     def query_memory_protection(self, address: int) -> str:
-        protection: str = self._frida_rpc.query_memory_protection(address)
-        return protection
+        try:
+            protection: str = self._frida_rpc.query_memory_protection(address)
+            return protection
+        except frida.core.RPCException as e:
+            raise QueryProcessMemoryError from e
 
     def set_memory_protection(self, address: int, size: int,
                               protection: str) -> bool:

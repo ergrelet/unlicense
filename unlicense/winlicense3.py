@@ -4,7 +4,7 @@ from typing import (Tuple, Dict, Any, Optional)
 
 from .dump_utils import dump_pe, pointer_size_to_fmt
 from .emulation import resolve_wrapped_api
-from .process_control import ProcessController, MemoryRange
+from .process_control import ProcessController, MemoryRange, QueryProcessMemoryError
 
 LOG = logging.getLogger(__name__)
 
@@ -39,42 +39,87 @@ def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
 def _find_iat(process_controller: ProcessController) -> Optional[MemoryRange]:
     """
     Try to find the "obfuscated" IAT. It seems the start of the IAT is always
-    at the start of a memory range of the main module.
+    at the "start" of a memory range of the main module.
     """
     exports_dict = process_controller.enumerate_exported_functions()
     LOG.debug("Exports count: %d", len(exports_dict))
 
     for m_range in process_controller.main_module_ranges:
-        data = process_controller.read_process_memory(
-            m_range.base, min(m_range.size, process_controller.page_size))
-        LOG.debug("Looking for the IAT at %s", hex(m_range.base))
-        if _looks_like_iat(data, exports_dict, process_controller):
-            return m_range
+        page_size = process_controller.page_size
+        page_count = m_range.size // page_size
+        # Empirical choice: look at the first 4 pages of each memory range
+        for page_index in range(0, min(4, page_count)):
+            page_addr = m_range.base + page_index * page_size
+            data = process_controller.read_process_memory(page_addr, page_size)
+            LOG.debug("Looking for the IAT at (%s, %s)", hex(page_addr),
+                      hex(page_size))
+            iat_start_offset = _find_iat_start(data, exports_dict,
+                                               process_controller)
+            if iat_start_offset >= 0:
+                return MemoryRange(
+                    page_addr + iat_start_offset,
+                    m_range.size - page_index * page_size - iat_start_offset,
+                    m_range.protection)
     return None
 
 
-def _looks_like_iat(data: bytes, exports: Dict[int, Dict[str, Any]],
-                    process_controller: ProcessController) -> bool:
+def _find_iat_start(data: bytes, exports: Dict[int, Dict[str, Any]],
+                    process_controller: ProcessController) -> int:
     """
     Check whether `data` looks like an "obfuscated" IAT. Themida 3.x wraps
     most of the imports but not all of them (the threshold of 4% of valid
-    imports has been chosen empirically).
+    imports and 50% of pointers to RWX memory has been chosen empirically).
+    Returns -1 if this doesn't look like there's an obfuscated IAT in `data`.
     """
     ptr_format = pointer_size_to_fmt(process_controller.pointer_size)
     elem_count = min(100, len(data) // process_controller.pointer_size)
-    required_valid_elements = int(1 + (elem_count * 0.04))
+    LOG.debug("Scanning %d elements, pointer size is %d", elem_count,
+              process_controller.pointer_size)
     data_size = elem_count * process_controller.pointer_size
-    valid_ptr_count = 0
-    for i in range(0, data_size, process_controller.pointer_size):
+    # Look for beginning of IAT
+    start_offset = 0
+    for i in range(0,
+                   len(data) // process_controller.pointer_size,
+                   process_controller.pointer_size):
         ptr = struct.unpack(ptr_format,
                             data[i:i + process_controller.pointer_size])[0]
         if ptr in exports:
-            valid_ptr_count += 1
+            start_offset = i
+            break
+        try:
+            if process_controller.query_memory_protection(ptr) == "rwx":
+                start_offset = i
+                break
+        except QueryProcessMemoryError:
+            # Ignore invalid pointers
+            pass
 
+    LOG.debug("Potential start offset %s for the IAT", hex(start_offset))
+    non_null_count = 0
+    valid_ptr_count = 0
+    rwx_dest_count = 0
+    for i in range(start_offset, data_size, process_controller.pointer_size):
+        ptr = struct.unpack(ptr_format,
+                            data[i:i + process_controller.pointer_size])[0]
+        if ptr != 0:
+            non_null_count += 1
+        if ptr in exports:
+            valid_ptr_count += 1
+        try:
+            prot = process_controller.query_memory_protection(ptr)
+            if prot == "rwx":
+                rwx_dest_count += 1
+        except:
+            pass
+
+    LOG.debug("Non-null pointer count: %d", non_null_count)
     LOG.debug("Valid APIs count: %d", valid_ptr_count)
-    if valid_ptr_count >= required_valid_elements:
-        return True
-    return False
+    LOG.debug("RWX destination count: %d", rwx_dest_count)
+    required_valid_elements = int(1 + (non_null_count * 0.04))
+    required_rwx_elements = int(1 + (non_null_count * 0.50))
+    if valid_ptr_count >= required_valid_elements and rwx_dest_count >= required_rwx_elements:
+        return start_offset
+    return -1
 
 
 def _unwrap_iat(
