@@ -151,7 +151,7 @@ def _unwrap_iat(
             wrapper_start = struct.unpack(
                 ptr_format, data[i:i + process_controller.pointer_size])[0]
             if wrapper_start == 0:
-                last_nullptr_offset = i
+                last_nullptr_offset = (current_page_addr - iat_range.base) + i
             # Wrappers are located in one of the module's section
             if in_main_module(wrapper_start):
                 resolved_api = resolve_wrapped_api(wrapper_start,

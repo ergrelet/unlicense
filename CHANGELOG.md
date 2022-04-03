@@ -7,6 +7,7 @@
 - Improve version detection to handle packed Delphi executables
 - Improve IAT search algorithm for Themida/Winlicense 3.x
 - Gracefully handle bitness mismatch between interpreter and target PEs
+- Fix IAT truncation issue for IATs bigger than 4 KiB
 
 ## [0.1.0] - 2021-11-13
 
