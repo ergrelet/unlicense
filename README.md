@@ -1,4 +1,4 @@
-# Unlicense [![](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+# Unlicense [![](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) ![CI status](https://github.com/ergrelet/unlicense/actions/workflows/ci.yml/badge.svg??branch=main)
 
 A Python 3 tool to dynamically unpack executables protected with
 WinLicense/Themida 2.x and 3.x.

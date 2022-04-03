@@ -109,15 +109,15 @@ def interpreter_can_dump_pe(pe_file_path: str) -> bool:
         bitness = struct.calcsize("P") * 8
         if bitness == 64:
             # Only 64-bit PEs are supported
-            return pe_architecture == lief.PE.MACHINE_TYPES.AMD64
+            return bool(pe_architecture == lief.PE.MACHINE_TYPES.AMD64)
         if bitness == 32:
             # Only 32-bit PEs are supported
-            return pe_architecture == lief.PE.MACHINE_TYPES.I386
+            return bool(pe_architecture == lief.PE.MACHINE_TYPES.I386)
         return False
 
     # 32-bit OS on x86
-    elif current_platform == "x86":
+    if current_platform == "x86":
         # Only 32-bit PEs are supported
-        return pe_architecture == lief.PE.MACHINE_TYPES.I386
+        return bool(pe_architecture == lief.PE.MACHINE_TYPES.I386)
 
     return False
