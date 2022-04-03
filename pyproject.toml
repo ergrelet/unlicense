@@ -6,7 +6,7 @@ authors = ["Erwan Grelet"]
 license = "GPL-3.0-or-later"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.8, <=3.10"
 frida = "^15.0"
 unicorn = "^1.0"
 lief = "^0.11"
@@ -20,6 +20,7 @@ mypy = "^0.910"
 pylint = "^2.11"
 yapf = "^0.32.0"
 toml = "^0.10.2"
+pyinstaller = "^4.10"
 
 [tool.poetry.scripts]
 unlicense = 'unlicense.application:main'
