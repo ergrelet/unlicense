@@ -8,6 +8,7 @@ import lief  # type: ignore
 import fire  # type: ignore
 
 from . import frida_exec, winlicense2, winlicense3
+from .dump_utils import interpreter_can_dump_pe
 from .version_detection import detect_winlicense_version
 
 # Supported Themida/WinLicense major versions
@@ -50,6 +51,12 @@ def run_unlicense(
     elif target_version not in SUPPORTED_VERSIONS:
         LOG.error("Target version '%d' is not supported", target_version)
         sys.exit(2)
+
+    # Check PE architecture and bitness
+    if not interpreter_can_dump_pe(exe_to_dump):
+        LOG.error("Target PE cannot be dumped with this interpreter. "
+                  "This is most likely a 32 vs 64 bit mismatch.")
+        sys.exit(3)
 
     dumped_image_base = 0
     dumped_oep = 0

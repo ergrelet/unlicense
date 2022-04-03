@@ -1,5 +1,7 @@
 import logging
 import os
+import platform
+import struct
 from tempfile import TemporaryDirectory
 
 import lief  # type: ignore
@@ -95,3 +97,27 @@ def pointer_size_to_fmt(pointer_size: int) -> str:
     if pointer_size == 8:
         return "<Q"
     raise NotImplementedError("Platform not supported")
+
+
+def interpreter_can_dump_pe(pe_file_path: str) -> bool:
+    current_platform = platform.machine()
+    binary = lief.parse(pe_file_path)
+    pe_architecture = binary.header.machine
+
+    # 64-bit OS on x86
+    if current_platform == "AMD64":
+        bitness = struct.calcsize("P") * 8
+        if bitness == 64:
+            # Only 64-bit PEs are supported
+            return pe_architecture == lief.PE.MACHINE_TYPES.AMD64
+        if bitness == 32:
+            # Only 32-bit PEs are supported
+            return pe_architecture == lief.PE.MACHINE_TYPES.I386
+        return False
+
+    # 32-bit OS on x86
+    elif current_platform == "x86":
+        # Only 32-bit PEs are supported
+        return pe_architecture == lief.PE.MACHINE_TYPES.I386
+
+    return False
