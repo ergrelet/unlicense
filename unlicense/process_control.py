@@ -100,6 +100,13 @@ class ProcessController(abc.ABC):
                 self.main_module_name, True)
         return self._main_module_ranges
 
+    def clear_cached_data(self) -> None:
+        """
+        Can be used to better control memory consumption. This is useful for
+        32-bit interpreters.
+        """
+        self._main_module_ranges = None
+
 
 class ProcessControllerException(Exception):
     pass

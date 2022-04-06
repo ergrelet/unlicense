@@ -1,3 +1,4 @@
+import gc
 import logging
 import os
 import platform
@@ -22,6 +23,12 @@ def dump_pe(
     iat_size: int,
     add_new_iat: bool,
 ) -> bool:
+    # Reclaim as much memory as possible. This is kind of a hack for 32-bit
+    # interpreters not to run out of memory when dumping.
+    # Idea: `pefile` might be less memory hungry than `lief` for our use case?
+    process_controller.clear_cached_data()
+    gc.collect()
+
     with TemporaryDirectory() as tmp_dir:
         TMP_FILE_PATH = os.path.join(tmp_dir, "unlicense.tmp")
         dump_success = pyscylla.dump_pe(process_controller.pid, image_base,
