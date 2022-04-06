@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.1.1] - 2022-04-06
 ### Fixed
 - Fix IAT patching in some cases for Themida/Winlicense 3.x
 - Fix inability to read remote chunks of memory bigger than 128 MiB
