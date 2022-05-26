@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+- Handle unpacking of 32-bit and 64-bit .NET assembly PEs (EXE only)
 
 ## [0.1.1] - 2022-04-06
 ### Fixed

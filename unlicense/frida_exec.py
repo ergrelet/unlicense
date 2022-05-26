@@ -15,6 +15,8 @@ LOG = logging.getLogger(__name__)
 # See issue #7: messages cannot exceed 128MiB
 MAX_DATA_CHUNK_SIZE = 64 * 1024 * 1024
 
+OepReachedCallback = Callable[[int, int, bool], None]
+
 
 class FridaProcessController(ProcessController):
 
@@ -138,7 +140,7 @@ def _str_to_architecture(frida_arch: str) -> Architecture:
 
 def spawn_and_instrument(
         exe_path: Path,
-        notify_oep_reached: Callable[[int, int], None]) -> ProcessController:
+        notify_oep_reached: OepReachedCallback) -> ProcessController:
     main_module_name = exe_path.name
     pid: int = frida.spawn((str(exe_path), ))
     session = frida.attach(pid)
@@ -158,7 +160,7 @@ def spawn_and_instrument(
     return process_controller
 
 
-def _frida_callback(notify_oep_reached: Callable[[int, int], None],
+def _frida_callback(notify_oep_reached: OepReachedCallback,
                     message: Dict[str, Any], _data: Any) -> None:
     msg_type = message['type']
     if msg_type == 'error':
@@ -172,8 +174,9 @@ def _frida_callback(notify_oep_reached: Callable[[int, int], None],
         if event == 'oep_reached':
             # Note: We cannot use RPCs in `on_message` callbacks, so we have to
             # delay the actual dumping.
-            notify_oep_reached(int(payload['BASE'], 16),
-                               int(payload['OEP'], 16))
+            notify_oep_reached(int(payload['BASE'],
+                                   16), int(payload['OEP'], 16),
+                               bool(payload['DOTNET']))
             return
 
     raise NotImplementedError('Unknown message received')

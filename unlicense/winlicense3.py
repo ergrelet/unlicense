@@ -10,7 +10,7 @@ LOG = logging.getLogger(__name__)
 
 
 def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
-                    image_base: int, oep: int) -> None:
+                    image_base: int, oep: int, is_dotnet: bool) -> None:
     """
     Main dumping routine for Themida/WinLicense 3.x.
     """
