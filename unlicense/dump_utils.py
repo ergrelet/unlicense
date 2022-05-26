@@ -58,6 +58,22 @@ def dump_pe(
     return True
 
 
+def dump_dotnet_assembly(
+    process_controller: ProcessController,
+    image_base: int,
+) -> bool:
+    output_file_name = f"unpacked_{process_controller.main_module_name}"
+    dump_success = pyscylla.dump_pe(process_controller.pid, image_base,
+                                    image_base, output_file_name, None)
+    if not dump_success:
+        LOG.error("Failed to dump PE")
+        return False
+
+    LOG.info("Output file has been saved at '%s'", output_file_name)
+
+    return True
+
+
 def _rebuild_pe(pe_file_path: str) -> None:
     binary = lief.parse(pe_file_path)
     # Rename sections

@@ -8,7 +8,7 @@ import lief  # type: ignore
 import fire  # type: ignore
 
 from . import frida_exec, winlicense2, winlicense3
-from .dump_utils import interpreter_can_dump_pe
+from .dump_utils import dump_dotnet_assembly, interpreter_can_dump_pe
 from .version_detection import detect_winlicense_version
 
 # Supported Themida/WinLicense major versions
@@ -51,6 +51,7 @@ def run_unlicense(
     elif target_version not in SUPPORTED_VERSIONS:
         LOG.error("Target version '%d' is not supported", target_version)
         sys.exit(2)
+    LOG.info("Detected packer version: %d.x", target_version)
 
     # Check PE architecture and bitness
     if not interpreter_can_dump_pe(exe_to_dump):
@@ -60,13 +61,16 @@ def run_unlicense(
 
     dumped_image_base = 0
     dumped_oep = 0
+    is_dotnet = False
     oep_reached = threading.Event()
 
-    def notify_oep_reached(image_base: int, oep: int) -> None:
+    def notify_oep_reached(image_base: int, oep: int, dotnet: bool) -> None:
         nonlocal dumped_image_base
         nonlocal dumped_oep
+        nonlocal is_dotnet
         dumped_image_base = image_base
         dumped_oep = oep
+        is_dotnet = dotnet
         oep_reached.set()
 
     # Spawn the packed executable and instrument it to find its OEP
@@ -75,21 +79,28 @@ def run_unlicense(
     try:
         # Block until OEP is reached
         oep_reached.wait()
-        LOG.info("OEP reached: OEP=%s BASE=%s)", hex(dumped_oep),
-                 hex(dumped_image_base))
+        LOG.info("OEP reached: OEP=%s BASE=%s DOTNET=%r", hex(dumped_oep),
+                 hex(dumped_image_base), is_dotnet)
         if pause_on_oep:
             input("Thread blocked, press ENTER to proceed with the dumping.")
 
         if force_oep is not None:
             dumped_oep = dumped_image_base + force_oep
             LOG.info("Using given OEP RVA value instead (%s)", hex(force_oep))
+
+        # .NET assembly dumping works the same way regardless of the version
+        if is_dotnet:
+            LOG.info("Dumping .NET assembly ...")
+            if not dump_dotnet_assembly(process_controller, dumped_image_base):
+                LOG.error(".NET assembly dump failed")
         # Fix imports and dump the executable
-        if target_version == 2:
+        elif target_version == 2:
             winlicense2.fix_and_dump_pe(process_controller, exe_to_dump,
                                         dumped_image_base, dumped_oep)
         elif target_version == 3:
             winlicense3.fix_and_dump_pe(process_controller, exe_to_dump,
-                                        dumped_image_base, dumped_oep)
+                                        dumped_image_base, dumped_oep,
+                                        is_dotnet)
     finally:
         # Try to kill the process on exit
         process_controller.terminate_process()

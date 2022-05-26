@@ -11,7 +11,7 @@ Note: You need to use a 32-bit Python interpreter to dump 32-bit executables.
 ## Features
 
 * Handles Themida/Winlicense 2.x and 3.x
-* Handles 32-bit and 64-bit executables
+* Handles 32-bit and 64-bit executables (including .NET assemblies)
 * Recovers the original entry point (OEP) automatically
 * Recovers the (obfuscated) import table automatically
 
