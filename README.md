@@ -17,7 +17,6 @@ Note: You need to use a 32-bit Python interpreter to dump 32-bit executables.
 
 ## Known Limitations
 
-* Original entry point resolution works only for targets using the MSVC runtime
 * Doesn't automatically recover OEPs for executables with virtualized entry points
 * Doesn't produce runnable dumps in most cases
 * Resolving imports for 32-bit executables packed with Themida 2.x is pretty slow
