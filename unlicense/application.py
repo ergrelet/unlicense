@@ -26,9 +26,10 @@ def run_unlicense(
     pause_on_oep: bool = False,
     force_oep: Optional[int] = None,
     target_version: Optional[int] = None,
+    timeout: int = 10,
 ) -> None:
     """
-    Unpack executables protected with WinLicense/Themida.
+    Unpack executables protected with WinLicense/Themida 2.x and 3.x
     """
     if verbose:
         log_level = logging.DEBUG
@@ -78,7 +79,10 @@ def run_unlicense(
         exe_path, notify_oep_reached)
     try:
         # Block until OEP is reached
-        oep_reached.wait()
+        if not oep_reached.wait(float(timeout)):
+            LOG.error("Original entry point wasn't reached before timeout")
+            sys.exit(4)
+
         LOG.info("OEP reached: OEP=%s BASE=%s DOTNET=%r", hex(dumped_oep),
                  hex(dumped_image_base), is_dotnet)
         if pause_on_oep:

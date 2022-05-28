@@ -3,6 +3,11 @@
 ## [Unreleased]
 ### Added
 - Handle unpacking of 32-bit and 64-bit .NET assembly PEs (EXE only)
+- OEP detection times out after 10 seconds by default. The duration can be
+  changed through the CLI.
+
+### Fixed
+- Improve .text section detection for Themida/Winlicense 2.x
 
 ## [0.1.1] - 2022-04-06
 ### Fixed
