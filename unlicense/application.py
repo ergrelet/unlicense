@@ -99,8 +99,7 @@ def run_unlicense(
                                         dumped_image_base, dumped_oep)
         elif target_version == 3:
             winlicense3.fix_and_dump_pe(process_controller, exe_to_dump,
-                                        dumped_image_base, dumped_oep,
-                                        is_dotnet)
+                                        dumped_image_base, dumped_oep)
     finally:
         # Try to kill the process on exit
         process_controller.terminate_process()

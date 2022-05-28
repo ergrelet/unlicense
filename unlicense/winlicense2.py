@@ -3,6 +3,8 @@ import struct
 from collections import defaultdict
 from typing import (Dict, List, Tuple, Any, Optional, Set)
 
+import lief  # type: ignore
+import lief.PE  # type: ignore
 from capstone import (  # type: ignore
     Cs, CS_ARCH_X86, CS_MODE_32, CS_MODE_64)
 from capstone.x86 import X86_OP_MEM, X86_OP_IMM  # type: ignore
@@ -29,11 +31,27 @@ def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
     """
     Main dumping routine for Themida/WinLicense 2.x.
     """
-    # Assume the first executable section is the .text section
-    # TODO: Handle different layouts
-    text_section_range = next(
-        filter(lambda r: r.protection[2] == 'x',
-               process_controller.main_module_ranges))
+    text_section_info = _fetch_text_section_information(pe_file_path)
+    if text_section_info is None:
+        LOG.error("Failed to find .text section in PE")
+        return
+
+    section_virtual_offset, section_virtual_size = text_section_info
+    section_virtual_addr = image_base + section_virtual_offset
+
+    text_section_range = MemoryRange(section_virtual_addr,
+                                     section_virtual_size, "r-x", bytearray())
+    assert text_section_range.data is not None
+
+    # Ensure the .text section address seems coherent with the memory layout
+    for range in process_controller.main_module_ranges:
+        if range.data is not None and text_section_range.contains(range.base):
+            text_section_range.data += range.data
+
+    if len(text_section_range.data) != text_section_range.size:
+        LOG.error(".text section/range mismatch")
+        return
+
     LOG.debug(".text section: %s", str(text_section_range))
 
     arch = process_controller.architecture
@@ -81,6 +99,18 @@ def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
     LOG.info("Dumping PE with OEP=%s ...", hex(oep))
     dump_pe(process_controller, pe_file_path, image_base, oep, iat_addr,
             iat_size, True)
+
+
+def _fetch_text_section_information(
+        pe_file_path: str) -> Optional[Tuple[int, int]]:
+    # Consider the first executable section to be the text section
+    # TODO: Investigate and check if we need to handle different layouts
+    binary = lief.parse(pe_file_path)
+    for section in binary.sections:
+        if lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE in section.characteristics_lists:
+            return section.virtual_address, section.virtual_size
+
+    return None
 
 
 def _find_wrapped_imports(
