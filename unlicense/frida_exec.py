@@ -141,10 +141,17 @@ def _str_to_architecture(frida_arch: str) -> Architecture:
 
 
 def spawn_and_instrument(
-        exe_path: Path,
+        pe_path: Path,
         notify_oep_reached: OepReachedCallback) -> ProcessController:
-    main_module_name = exe_path.name
-    pid: int = frida.spawn((str(exe_path), ))
+    pid: int
+    if pe_path.suffix == ".dll":
+        # Use `rundll32` to load the DLL
+        rundll32_path = "C:\\Windows\\System32\\rundll32.exe"
+        pid = frida.spawn((rundll32_path, str(pe_path.absolute()), "#0"))
+    else:
+        pid = frida.spawn((str(pe_path), ))
+
+    main_module_name = pe_path.name
     session = frida.attach(pid)
     frida_js = resources.open_text("unlicense.resources", "frida.js").read()
     script = session.create_script(frida_js)
@@ -156,7 +163,7 @@ def spawn_and_instrument(
     frida_rpc = script.exports
     process_controller = FridaProcessController(pid, main_module_name, session,
                                                 script)
-    frida_rpc.setup_oep_tracing(exe_path.name)
+    frida_rpc.setup_oep_tracing(pe_path.name)
     frida.resume(pid)
 
     return process_controller

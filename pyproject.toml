@@ -13,7 +13,7 @@ lief = "^0.11"
 fire = "^0.4"
 capstone = "^4.0"
 xxhash = "^2.0"
-pyscylla = "^0.10.0"
+pyscylla = "^0.11.0"
 
 [tool.poetry.dev-dependencies]
 mypy = "^0.910"
