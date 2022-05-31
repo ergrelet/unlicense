@@ -1,9 +1,12 @@
 "use strict";
 
+const green = "\x1b[1;36m"
+const reset = "\x1b[0m"
+
 let allocatedBuffers = [];
 
 function log(message) {
-    console.log(`frida-agent: ${message}`);
+    console.log(`${green}frida-agent${reset}: ${message}`);
 }
 
 function walk_back_stack_for_oep(context, module) {

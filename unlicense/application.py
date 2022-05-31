@@ -4,11 +4,11 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-import lief  # type: ignore
 import fire  # type: ignore
 
 from . import frida_exec, winlicense2, winlicense3
 from .dump_utils import dump_dotnet_assembly, interpreter_can_dump_pe
+from .logger import setup_logger
 from .version_detection import detect_winlicense_version
 
 # Supported Themida/WinLicense major versions
@@ -31,12 +31,7 @@ def run_unlicense(
     """
     Unpack executables protected with Themida/WinLicense 2.x and 3.x
     """
-    if verbose:
-        log_level = logging.DEBUG
-    else:
-        log_level = logging.INFO
-    logging.basicConfig(level=log_level)
-    lief.logging.disable()
+    setup_logger(LOG, verbose)
 
     pe_path = Path(pe_to_dump)
     if not pe_path.is_file():
