@@ -1,9 +1,12 @@
 "use strict";
 
+const green = "\x1b[1;36m"
+const reset = "\x1b[0m"
+
 let allocatedBuffers = [];
 
 function log(message) {
-    console.log(`frida-agent: ${message}`);
+    console.log(`${green}frida-agent${reset}: ${message}`);
 }
 
 function walk_back_stack_for_oep(context, module) {
@@ -34,21 +37,50 @@ function walk_back_stack_for_oep(context, module) {
     return oepCandidate;
 }
 
-function compute_real_oep(oepCandidate) {
+function compute_real_oep_msvcrt(oepCandidate, isDll) {
     if (Process.arch == "ia32") {
-        // Note: This assumes the OEP looks like this (MSVC) and `oep_candidate`
+        if (isDll) {
+            // Note: This assumes the OEP looks like this (MSVC) and `oepCandidate`
+            // is located after the call:
+            //   push    ebp
+            //   mov     ebp, esp
+            //   cmp     [ebp+fdwReason], 1
+            //   jnz     short loc_X
+            //   call    __security_init_cookie
+            return oepCandidate.sub(0xE);
+        }
+
+        // Note: This assumes the OEP looks like this (MSVC) and `oepCandidate`
         // is located after the call:
         //   call __security_init_cookie
         //   jmp __tmainCRTStartup
         return oepCandidate.sub(5);
+
     } else if (Process.arch == "x64") {
-        // Note: This assumes the OEP looks like this (MSVC) and `oep_candidate`
+        if (isDll) {
+            // Note: This assumes the OEP looks like this (MSVC) and `oepCandidate`
+            // is located after the call:
+            //   mov [rsp+8h], rbx
+            //   mov [rsp+10h], rsi
+            //   push rdi
+            //   sub rsp, 20h
+            //   mov rdi, r8
+            //   mov ebx, edx
+            //   mov rsi, rcx
+            //   cmp edx, 1
+            //   jnz short loc_X
+            //   call __security_init_cookie
+            return oepCandidate.sub(0x21);
+        }
+
+        // Note: This assumes the OEP looks like this (MSVC) and `oepCandidate`
         // is located after the call:
         //   sub rsp, 0x28
         //   call __security_init_cookie
         //   add rsp, 0x28
         //   jmp __tmainCRTStartup
         return oepCandidate.sub(9);
+
     } else {
         // FIXME
         return oepCandidate;
@@ -58,30 +90,36 @@ function compute_real_oep(oepCandidate) {
 // Define available RPCs
 rpc.exports = {
     setupOepTracing: function (moduleName) {
-        const dumpedModule = Process.findModuleByName(moduleName);
-        if (dumpedModule == null) {
-            log('Invalid module specified');
-            return;
-        }
         log(`Setting up OEP tracing for "${moduleName}"`);
 
+        let isDll = moduleName.endsWith(".dll");
+        let dumpedModule = null;
+        let getSystemTimeAsFileTimeHooked = false;
+        let corExeMainHooked = false;
         // Hook `ntdll.NtMapViewOfSection` as a mean to get called when new PE
         // images are loaded.
         const ntMapViewOfSection = Module.findExportByName('ntdll', 'NtMapViewOfSection');
-        let queryPerformanceCounterHooked = false;
-        let corExeMainHooked = false;
         Interceptor.attach(ntMapViewOfSection, {
             onLeave: function (_args) {
-                // Hook `kernel32.QueryPerformanceCounter` if present
+                if (dumpedModule == null) {
+                    dumpedModule = Process.findModuleByName(moduleName);
+                    if (dumpedModule == null) {
+                        // Module isn't loaded yet
+                        return;
+                    }
+                    log("Target module is loaded ...");
+                }
+
+                // Hook `kernel32.GetSystemTimeAsFileTime` if present
                 // This is used to detect the CRT entry point for EXEs compiled
                 // from C, C++ (or Deplhi) 
-                const queryPerformanceCounter = Module.findExportByName('kernel32', 'QueryPerformanceCounter');
-                if (queryPerformanceCounter != null && !queryPerformanceCounterHooked) {
-                    Interceptor.attach(queryPerformanceCounter, {
+                const getSystemTimeAsFileTime = Module.findExportByName('kernel32', 'GetSystemTimeAsFileTime');
+                if (getSystemTimeAsFileTime != null && !getSystemTimeAsFileTimeHooked) {
+                    Interceptor.attach(getSystemTimeAsFileTime, {
                         onEnter: function (_args) {
                             let oepCandidate = walk_back_stack_for_oep(this.context, dumpedModule);
                             if (oepCandidate != null) {
-                                oepCandidate = compute_real_oep(oepCandidate);
+                                oepCandidate = compute_real_oep_msvcrt(oepCandidate, isDll);
                                 log(`Potential OEP (thread #${this.threadId}): ${oepCandidate}`);
                                 send({ 'event': 'oep_reached', 'OEP': oepCandidate, 'BASE': dumpedModule.base, 'DOTNET': false })
                                 let sync_op = recv('block_on_oep', function (_value) { });
@@ -89,7 +127,7 @@ rpc.exports = {
                             }
                         }
                     });
-                    queryPerformanceCounterHooked = true;
+                    getSystemTimeAsFileTimeHooked = true;
                 }
                 // Hook `clr.InitializeFusion` if present.
                 // This is used to detect a good point during the CLR's

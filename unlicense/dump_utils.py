@@ -31,25 +31,27 @@ def dump_pe(
 
     with TemporaryDirectory() as tmp_dir:
         TMP_FILE_PATH = os.path.join(tmp_dir, "unlicense.tmp")
-        dump_success = pyscylla.dump_pe(process_controller.pid, image_base,
-                                        oep, TMP_FILE_PATH, pe_file_path)
-        if not dump_success:
-            LOG.error("Failed to dump PE")
+        try:
+            pyscylla.dump_pe(process_controller.pid, image_base, oep,
+                             TMP_FILE_PATH, pe_file_path)
+        except pyscylla.ScyllaException as e:
+            LOG.error("Failed to dump PE: %s", str(e))
             return False
 
         LOG.info("Fixing dump ...")
         output_file_name = f"unpacked_{process_controller.main_module_name}"
         try:
-            pyscylla.fix_iat(process_controller.pid, iat_addr, iat_size,
-                             add_new_iat, TMP_FILE_PATH, output_file_name)
+            pyscylla.fix_iat(process_controller.pid, image_base, iat_addr,
+                             iat_size, add_new_iat, TMP_FILE_PATH,
+                             output_file_name)
         except pyscylla.ScyllaException as e:
             LOG.error("Failed to fix IAT: %s", str(e))
             return False
 
-        rebuild_success = pyscylla.rebuild_pe(output_file_name, False, True,
-                                              False)
-        if not rebuild_success:
-            LOG.error("Failed to rebuild PE (with Scylla)")
+        try:
+            pyscylla.rebuild_pe(output_file_name, False, True, False)
+        except pyscylla.ScyllaException as e:
+            LOG.error("Failed to rebuild PE: %s", str(e))
             return False
 
         _rebuild_pe(output_file_name)

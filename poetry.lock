@@ -60,7 +60,7 @@ termcolor = "*"
 
 [[package]]
 name = "frida"
-version = "15.1.22"
+version = "15.1.23"
 description = "Dynamic instrumentation toolkit for developers, reverse-engineers, and security researchers"
 category = "main"
 optional = false
@@ -150,7 +150,7 @@ python-versions = "*"
 
 [[package]]
 name = "pefile"
-version = "2021.9.3"
+version = "2022.5.30"
 description = "Python PE parsing module"
 category = "dev"
 optional = false
@@ -221,7 +221,7 @@ testutil = ["gitpython (>3)"]
 
 [[package]]
 name = "pyscylla"
-version = "0.10.0"
+version = "0.11.0"
 description = "Python bindings for Scylla"
 category = "main"
 optional = false
@@ -310,7 +310,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8, <=3.10"
-content-hash = "a36b9b508d9c9d4467bd66ea02a47df79f1c3a8c16641a1c7588bbfc78e582ba"
+content-hash = "4743c8801e6175972e968a409efac74fd51bcca8b5d3ab587a0704349867fc3b"
 
 [metadata.files]
 altgraph = [
@@ -340,26 +340,26 @@ fire = [
     {file = "fire-0.4.0.tar.gz", hash = "sha256:c5e2b8763699d1142393a46d0e3e790c5eb2f0706082df8f647878842c216a62"},
 ]
 frida = [
-    {file = "frida-15.1.22-py2.7-linux-aarch64.egg", hash = "sha256:6509c3ff236a7ec0dc60656b9a2dee155938784c5c8408f4d055ac56e544ea53"},
-    {file = "frida-15.1.22-py2.7-linux-armv7l.egg", hash = "sha256:bfd1bd8b8ac4573d6390ab0be8820b95db48f37f3448fcd764006f79371760cb"},
-    {file = "frida-15.1.22-py2.7-linux-i686.egg", hash = "sha256:ace5b436fb9ecd16d37783e35bc2fe4599948f6d47421169803348dce0ae7e0f"},
-    {file = "frida-15.1.22-py2.7-linux-x86_64.egg", hash = "sha256:6c61a5054c140995750a436a74c2fd65f758c514f7e41bb65806df75f178a6a0"},
-    {file = "frida-15.1.22-py2.7-macosx-10.9-x86_64.egg", hash = "sha256:78c1536899adc532759ba8c1a8ee8049505ff0cc49344c3ab00a42348e83e7c8"},
-    {file = "frida-15.1.22-py2.7-macosx-11.0-fat64.egg", hash = "sha256:6263c7c21a0b1317c206ca6f269f9ede082fa0a9d7879c5214e74d92be24607a"},
-    {file = "frida-15.1.22-py2.7-win-amd64.egg", hash = "sha256:b66158bb49a72df6040babf453b13229ac636d64050a025c588e880b06099ef0"},
-    {file = "frida-15.1.22-py2.7-win32.egg", hash = "sha256:972c903929dd64c8e2a1bc4d0c7eab1939f1a94c9348c483b27389de9bb6d95a"},
-    {file = "frida-15.1.22-py3.10-win-amd64.egg", hash = "sha256:f2db3897f963af97508c27bb04dfd907ac2ad2ed2a9389852f9eb195a19e44f9"},
-    {file = "frida-15.1.22-py3.10-win32.egg", hash = "sha256:8480cf38127c27f35ff27fa5011e6e145514f5e26b858592740de9977de67e8d"},
-    {file = "frida-15.1.22-py3.6-linux-aarch64.egg", hash = "sha256:bd3169f0701e27f4e1e4351b4634f626e59638eeffd52bfacaf8b46eafe324c7"},
-    {file = "frida-15.1.22-py3.6-linux-armv7l.egg", hash = "sha256:808fab64cabff8e0800fc848cf315bc1a8f07bb8c0190417a32da1448008eaa0"},
-    {file = "frida-15.1.22-py3.8-android-aarch64.egg", hash = "sha256:9a97f9f723afc9f855c8b3fda99c483ffcc8c1fc0e883d9bd1f30662092ba358"},
-    {file = "frida-15.1.22-py3.8-freebsd-amd64.egg", hash = "sha256:fe22290064fc6d5a3f121f5ca187c6f37edb3f401f723171bf983d152f02c673"},
-    {file = "frida-15.1.22-py3.8-freebsd-arm64.egg", hash = "sha256:07411faea06f1ed8e949ba3b057c7e761af448dc106deb43428534f765a7cfc5"},
-    {file = "frida-15.1.22-py3.8-linux-i686.egg", hash = "sha256:f822ea39ed800207ffcef35aee8576af6f22e471ae21011a632dd2d75f834f8d"},
-    {file = "frida-15.1.22-py3.8-linux-x86_64.egg", hash = "sha256:4cc31b017ef271bf521c0d54e848739423c17e191cac0a31e62b27635d3d5f75"},
-    {file = "frida-15.1.22-py3.8-macosx-10.9-x86_64.egg", hash = "sha256:b1738793dcacea60a3ef8fe6d9cf53cce1087f3f678e563c665622667dbca284"},
-    {file = "frida-15.1.22-py3.8-macosx-11.0-arm64.egg", hash = "sha256:433b42529ac84deefc74564dc86138a3e6bde4b5aca8b6064ef2bbac7fd62083"},
-    {file = "frida-15.1.22.tar.gz", hash = "sha256:8bf455acfec8646afdc7bc78fb6befaa917382e71726eb776a7d473bf3599df7"},
+    {file = "frida-15.1.23-py2.7-linux-aarch64.egg", hash = "sha256:e82efcfb8c2f8e26687806f4b1c85872502cbbcfe1752ed0f2590ee7e97aa6a5"},
+    {file = "frida-15.1.23-py2.7-linux-armv7l.egg", hash = "sha256:7eca72893f58582cf80dcb08f3bc492d8c5990ccef9defd436987601eb157498"},
+    {file = "frida-15.1.23-py2.7-linux-i686.egg", hash = "sha256:1be639756f4272e6759cc883e39ec15a975101d56facc1078c9c6121de6823a8"},
+    {file = "frida-15.1.23-py2.7-linux-x86_64.egg", hash = "sha256:e44f05ac78c03f52d56d987f455d783f3967e07e2f7705a25596524f4aae3226"},
+    {file = "frida-15.1.23-py2.7-macosx-10.9-x86_64.egg", hash = "sha256:dd7a9fb7f2de7e59631293b4f1278b26d604f750890dc467bb2d12395d7feb80"},
+    {file = "frida-15.1.23-py2.7-macosx-11.0-fat64.egg", hash = "sha256:7f946e1877c489a9257c293c2290385ae3e03e13071826dec7c7e39c4f072ba1"},
+    {file = "frida-15.1.23-py2.7-win-amd64.egg", hash = "sha256:1695059cea404c019082d3dd0f1e7b94f90444174a83e250e74991480e0d2d6c"},
+    {file = "frida-15.1.23-py2.7-win32.egg", hash = "sha256:db2cd3939cc61455929e02b1fc1c396fc13dcd0d5749780065612241c0990d35"},
+    {file = "frida-15.1.23-py3.10-win-amd64.egg", hash = "sha256:76cde6cd9ca22f3a3618d96f337837fd946d4ca4e1432fef469c4b39a6a672f0"},
+    {file = "frida-15.1.23-py3.10-win32.egg", hash = "sha256:30857cab52900dbb11e5b442e69b33368aabfd92f43dd3ba97a7741136bbbd0d"},
+    {file = "frida-15.1.23-py3.6-linux-aarch64.egg", hash = "sha256:cf3f5c8576381ef895e0b09c844843823d205c0630d5f16839c20f43775a3899"},
+    {file = "frida-15.1.23-py3.6-linux-armv7l.egg", hash = "sha256:b52657586356298c470ea883a10809b3e1527db8576a39af2a29dfcf53005de4"},
+    {file = "frida-15.1.23-py3.8-android-aarch64.egg", hash = "sha256:a0368e20396c32896dd44bd24f9788aaa1a6368ba3bf3506ccfd4f5c19d74526"},
+    {file = "frida-15.1.23-py3.8-freebsd-amd64.egg", hash = "sha256:96bfe54a67845b02c79044a009e6a0bf405923c0c24d9e59621d6a17d324e6dd"},
+    {file = "frida-15.1.23-py3.8-freebsd-arm64.egg", hash = "sha256:5dd2b4d423d141fde158e10fabf2df90d9058b922de9ccedbe69accaf65da337"},
+    {file = "frida-15.1.23-py3.8-linux-i686.egg", hash = "sha256:c8ee0984c57e9f9dd4f7eba912a93919d97bd3bbe22855de3fa8aebd6fbb386a"},
+    {file = "frida-15.1.23-py3.8-linux-x86_64.egg", hash = "sha256:da20be5bb4a66288607de24f2e6bbafcf380808b480f0aeeeee0e8ab61582bb8"},
+    {file = "frida-15.1.23-py3.8-macosx-10.9-x86_64.egg", hash = "sha256:50810d4f7bf1601a6d9329d64e08ecaf8f0d991008fa44ed582ed00ba56625d5"},
+    {file = "frida-15.1.23-py3.8-macosx-11.0-arm64.egg", hash = "sha256:28053b96c35593eb5b89ebb58d892c29ee44438b0d33905187c68caa8d67aad2"},
+    {file = "frida-15.1.23.tar.gz", hash = "sha256:810638e012790f9924eea92a3dfb51ef38eb0ac013467c1b3e544e55509b49a6"},
 ]
 future = [
     {file = "future-0.18.2.tar.gz", hash = "sha256:b1bead90b70cf6ec3f0710ae53a525360fa360d306a86583adc6bf83a4db537d"},
@@ -473,7 +473,7 @@ mypy-extensions = [
     {file = "mypy_extensions-0.4.3.tar.gz", hash = "sha256:2d82818f5bb3e369420cb3c4060a7970edba416647068eb4c5343488a6c604a8"},
 ]
 pefile = [
-    {file = "pefile-2021.9.3.tar.gz", hash = "sha256:344a49e40a94e10849f0fe34dddc80f773a12b40675bf2f7be4b8be578bdd94a"},
+    {file = "pefile-2022.5.30.tar.gz", hash = "sha256:a5488a3dd1fd021ce33f969780b88fe0f7eebb76eb20996d7318f307612a045b"},
 ]
 platformdirs = [
     {file = "platformdirs-2.5.2-py3-none-any.whl", hash = "sha256:027d8e83a2d7de06bbac4e5ef7e023c02b863d7ea5d079477e722bb41ab25788"},
@@ -501,12 +501,12 @@ pylint = [
     {file = "pylint-2.13.9.tar.gz", hash = "sha256:095567c96e19e6f57b5b907e67d265ff535e588fe26b12b5ebe1fc5645b2c731"},
 ]
 pyscylla = [
-    {file = "pyscylla-0.10.0-cp37-cp37m-win32.whl", hash = "sha256:4beb5c34304cda895235cbadbafd73552b7798c0284a5f3702ee5b10794b62ef"},
-    {file = "pyscylla-0.10.0-cp37-cp37m-win_amd64.whl", hash = "sha256:a346ade035ea9083c055df2578fc278d7b4fef6d2fb62dceb65480295c12a7b9"},
-    {file = "pyscylla-0.10.0-cp38-cp38-win32.whl", hash = "sha256:722481bf7f7b4825bf57e03e626eba7c70113c536c57ea7202e723029e953415"},
-    {file = "pyscylla-0.10.0-cp38-cp38-win_amd64.whl", hash = "sha256:a188cb6887b82e58a9dc288e192d75af5fff458c522cc3b22f2fe50a543077a9"},
-    {file = "pyscylla-0.10.0-cp39-cp39-win32.whl", hash = "sha256:3f8e750945951c28f89be8fe393b6a9a3880c0db8145bbfcf545e4f90207166f"},
-    {file = "pyscylla-0.10.0-cp39-cp39-win_amd64.whl", hash = "sha256:3f5b2439ead87f4840fc064e209453b783c34254cf559c9514595334641f009a"},
+    {file = "pyscylla-0.11.0-cp310-cp310-win32.whl", hash = "sha256:bf925199719dde0c725b91a1af7c7c74d9f8585bbca74c6532fa88748df7cae9"},
+    {file = "pyscylla-0.11.0-cp310-cp310-win_amd64.whl", hash = "sha256:9cc1b092216a9b8f0d03b5e8ab233a9cedebfaad87e0e03ab9fe1a668104fa11"},
+    {file = "pyscylla-0.11.0-cp38-cp38-win32.whl", hash = "sha256:c07cb71194ab8c076d5856a4d1916fe10214542661c53fc2f97440f94d7fb8bb"},
+    {file = "pyscylla-0.11.0-cp38-cp38-win_amd64.whl", hash = "sha256:ae0dc6a99c9462c53d2d7acda4f214e5de7c182dffe3d766bdd62c4fd7ffcdd7"},
+    {file = "pyscylla-0.11.0-cp39-cp39-win32.whl", hash = "sha256:53806521526528ff48a7d15941f8bc5e8babfcec3dcc8883ab7dc5f4f69e4503"},
+    {file = "pyscylla-0.11.0-cp39-cp39-win_amd64.whl", hash = "sha256:e5e81cce687696897d56658691f0858074fb7b63072ac643339538c8cdf4c953"},
 ]
 pywin32-ctypes = [
     {file = "pywin32-ctypes-0.2.0.tar.gz", hash = "sha256:24ffc3b341d457d48e8922352130cf2644024a4ff09762a2261fd34c36ee5942"},

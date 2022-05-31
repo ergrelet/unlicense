@@ -1,7 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.2.0] - 2022-05-31
 ### Added
+- Handle unpacking of 32-bit and 64-bit DLLs
 - Handle unpacking of 32-bit and 64-bit .NET assembly PEs (EXE only)
 - OEP detection times out after 10 seconds by default. The duration can be
   changed through the CLI.
