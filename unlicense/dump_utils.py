@@ -65,10 +65,11 @@ def dump_dotnet_assembly(
     image_base: int,
 ) -> bool:
     output_file_name = f"unpacked_{process_controller.main_module_name}"
-    dump_success = pyscylla.dump_pe(process_controller.pid, image_base,
-                                    image_base, output_file_name, None)
-    if not dump_success:
-        LOG.error("Failed to dump PE")
+    try:
+        pyscylla.dump_pe(process_controller.pid, image_base, image_base,
+                         output_file_name, None)
+    except pyscylla.ScyllaException as e:
+        LOG.error("Failed to dump PE: %s", str(e))
         return False
 
     LOG.info("Output file has been saved at '%s'", output_file_name)
