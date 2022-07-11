@@ -97,7 +97,7 @@ def _find_iat_start(data: bytes, exports: Dict[int, Dict[str, Any]],
     LOG.debug("Potential start offset %s for the IAT", hex(start_offset))
     non_null_count = 0
     valid_ptr_count = 0
-    rwx_dest_count = 0
+    rx_dest_count = 0
     for i in range(start_offset, data_size, process_controller.pointer_size):
         ptr = struct.unpack(ptr_format,
                             data[i:i + process_controller.pointer_size])[0]
@@ -107,17 +107,17 @@ def _find_iat_start(data: bytes, exports: Dict[int, Dict[str, Any]],
             valid_ptr_count += 1
         try:
             prot = process_controller.query_memory_protection(ptr)
-            if prot == "rwx":
-                rwx_dest_count += 1
+            if prot[0] == 'r' and prot[2] == 'x':
+                rx_dest_count += 1
         except:
             pass
 
     LOG.debug("Non-null pointer count: %d", non_null_count)
     LOG.debug("Valid APIs count: %d", valid_ptr_count)
-    LOG.debug("RWX destination count: %d", rwx_dest_count)
+    LOG.debug("R*X destination count: %d", rx_dest_count)
     required_valid_elements = int(1 + (non_null_count * 0.04))
-    required_rwx_elements = int(1 + (non_null_count * 0.50))
-    if valid_ptr_count >= required_valid_elements and rwx_dest_count >= required_rwx_elements:
+    required_rx_elements = int(1 + (non_null_count * 0.50))
+    if valid_ptr_count >= required_valid_elements and rx_dest_count >= required_rx_elements:
         return start_offset
     return -1
 
