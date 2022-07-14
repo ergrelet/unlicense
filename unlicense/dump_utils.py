@@ -4,14 +4,35 @@ import os
 import platform
 import struct
 from tempfile import TemporaryDirectory
+from typing import List, Optional
 
 import lief  # type: ignore
 import lief.PE  # type: ignore
 import pyscylla  # type: ignore
 
-from .process_control import ProcessController
+from .process_control import MemoryRange, ProcessController
 
 LOG = logging.getLogger(__name__)
+
+
+def probe_text_sections(pe_file_path: str) -> Optional[List[MemoryRange]]:
+    text_sections = []
+    binary = lief.parse(pe_file_path)
+
+    # Find the potential text sections (i.e., executable sections with "empty" names)
+    for section in binary.sections:
+        if len(section.name.replace(' ', '')) > 0:
+            break
+
+        if lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE in section.characteristics_lists:
+            LOG.debug("Probed .text section at (0x%x, 0x%x)",
+                      section.virtual_address, section.virtual_size)
+            text_sections += [
+                MemoryRange(section.virtual_address, section.virtual_size,
+                            "r-x")
+            ]
+
+    return None if len(text_sections) == 0 else text_sections
 
 
 def dump_pe(

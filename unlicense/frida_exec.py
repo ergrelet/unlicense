@@ -1,3 +1,4 @@
+from cgitb import text
 import functools
 import logging
 from importlib import resources
@@ -141,7 +142,7 @@ def _str_to_architecture(frida_arch: str) -> Architecture:
 
 
 def spawn_and_instrument(
-        pe_path: Path,
+        pe_path: Path, text_section_ranges: List[MemoryRange],
         notify_oep_reached: OepReachedCallback) -> ProcessController:
     pid: int
     if pe_path.suffix == ".dll":
@@ -163,7 +164,8 @@ def spawn_and_instrument(
     frida_rpc = script.exports
     process_controller = FridaProcessController(pid, main_module_name, session,
                                                 script)
-    frida_rpc.setup_oep_tracing(pe_path.name)
+    frida_rpc.setup_oep_tracing(pe_path.name, [[r.base, r.size]
+                                               for r in text_section_ranges])
     frida.resume(pid)
 
     return process_controller

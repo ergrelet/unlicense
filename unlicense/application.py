@@ -7,7 +7,7 @@ from typing import Optional
 import fire  # type: ignore
 
 from . import frida_exec, winlicense2, winlicense3
-from .dump_utils import dump_dotnet_assembly, interpreter_can_dump_pe
+from .dump_utils import dump_dotnet_assembly, interpreter_can_dump_pe, probe_text_sections
 from .logger import setup_logger
 from .version_detection import detect_winlicense_version
 
@@ -55,6 +55,11 @@ def run_unlicense(
                   "This is most likely a 32 vs 64 bit mismatch.")
         sys.exit(3)
 
+    text_section_ranges = probe_text_sections(pe_to_dump)
+    if text_section_ranges is None:
+        LOG.error("Failed to automatically detect .text section")
+        sys.exit(4)
+
     dumped_image_base = 0
     dumped_oep = 0
     is_dotnet = False
@@ -71,7 +76,7 @@ def run_unlicense(
 
     # Spawn the packed executable and instrument it to find its OEP
     process_controller = frida_exec.spawn_and_instrument(
-        pe_path, notify_oep_reached)
+        pe_path, text_section_ranges, notify_oep_reached)
     try:
         # Block until OEP is reached
         if not oep_reached.wait(float(timeout)):

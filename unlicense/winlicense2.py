@@ -46,10 +46,15 @@ def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
     # Ensure the .text section address seems coherent with the memory layout
     for range in process_controller.main_module_ranges:
         if range.data is not None and text_section_range.contains(range.base):
+            LOG.debug("0x%x - 0x%x", range.base, range.size)
             text_section_range.data += range.data
 
-    if len(text_section_range.data) != text_section_range.size:
-        LOG.error(".text section/range mismatch")
+    if len(text_section_range.data) > text_section_range.size:
+        text_section_range.data = text_section_range.data[:text_section_range.
+                                                          size]
+    elif len(text_section_range.data) < text_section_range.size:
+        LOG.error(".text section/range mismatch (0x%x != 0x%x)",
+                  len(text_section_range.data), text_section_range.size)
         return
 
     LOG.debug(".text section: %s", str(text_section_range))
@@ -91,10 +96,16 @@ def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
     LOG.info("Generated the fake IAT at %s, size=%s", hex(iat_addr),
              hex(iat_size))
 
+    # Ensure the range is writable
+    process_controller.set_memory_protection(text_section_range.base,
+                                             text_section_range.size, "rwx")
     # Replace detected references to wrappers or imports
     LOG.info("Patching call and jmp sites ...")
     _fix_import_references_in_process(api_to_calls, iat_addr,
                                       process_controller)
+    # Restore memory protection to RX
+    process_controller.set_memory_protection(text_section_range.base,
+                                             text_section_range.size, "r-x")
 
     LOG.info("Dumping PE with OEP=%s ...", hex(oep))
     dump_pe(process_controller, pe_file_path, image_base, oep, iat_addr,
