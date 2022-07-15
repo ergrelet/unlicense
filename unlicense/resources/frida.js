@@ -6,8 +6,25 @@ const reset = "\x1b[0m"
 let allocatedBuffers = [];
 let originalPageProtections = new Map();
 
+// TLS-related
+let skipTlsInstr32 = null;
+let skipTlsInstr64 = null;
+let tlsCallbackCount = 0;
+
 function log(message) {
     console.log(`${green}frida-agent${reset}: ${message}`);
+}
+
+function initializeTlsTrampolines() {
+    // ret; ret 0xC
+    const instructionsBytes = new Uint8Array([0xC3, 0xC2, 0x0C, 0x00]);
+
+    let bufferPointer = Memory.alloc(instructionsBytes.length);
+    Memory.protect(bufferPointer, instructionsBytes.length, 'rwx');
+    bufferPointer.writeByteArray(instructionsBytes.buffer);
+
+    skipTlsInstr64 = bufferPointer;
+    skipTlsInstr32 = bufferPointer.add(0x1);
 }
 
 function rangeContainsAddress(range, address) {
@@ -20,7 +37,7 @@ function isDotNetProcess() {
     return Process.findModuleByName("clr.dll") != null;
 }
 
-function changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expectedOepRanges) {
+function changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expectedOepRanges, moduleIsDll) {
     // Ensure potential OEP ranges are not executable by default
     expectedOepRanges.forEach((oepRange) => {
         let textSectionStart = dumpedModule.base.add(oepRange[0]);
@@ -31,14 +48,25 @@ function changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expected
 
     // Register an exception handler that'll detect the OEP
     Process.setExceptionHandler(exp => {
+        let expectionHandled = false;
         let oepCandidate = exp.context.pc;
-
         expectedOepRanges.forEach((oepRange) => {
             let textSectionStart = dumpedModule.base.add(oepRange[0]);
             let textSectionSize = oepRange[1];
             let textSectionRange = { base: textSectionStart, size: textSectionSize };
 
             if (rangeContainsAddress(textSectionRange, oepCandidate)) {
+                // If we're in a TLS callback, the first argument is the
+                // module's base address
+                if (!moduleIsDll && isTlsCallback(exp.context, dumpedModule)) {
+                    log(`TLS callback #${tlsCallbackCount} detected (at ${exp.context.pc}), skipping ...`);
+                    tlsCallbackCount++;
+
+                    // Modify PC to skip the callback's execution and return
+                    skipTlsCallback(exp.context);
+                    expectionHandled = true;
+                    return;
+                }
                 log(`Potential OEP: ${oepCandidate}`);
 
                 // Restore pages' intended protections
@@ -56,9 +84,53 @@ function changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expected
             }
         });
 
-        return false;
+        return expectionHandled;
     });
     log("Exception handler registered");
+}
+
+function isTlsCallback(exceptionCtx, dumpedModule) {
+    if (Process.arch == "x64") {
+        // If we're in a TLS callback, the first argument is the
+        // module's base address
+        let moduleBase = exceptionCtx.rcx;
+        if (!moduleBase.equals(dumpedModule.base)) {
+            return false;
+        }
+        // If we're in a TLS callback, the first argument is the
+        // reason (from 0 to 3).
+        let reason = exceptionCtx.rdx;
+        if (reason.compare(ptr(4)) > 0) {
+            return false;
+        }
+    }
+    else if (Process.arch == "ia32") {
+        let sp = exceptionCtx.sp;
+
+        let moduleBase = sp.add(0x4).readPointer();
+        if (!moduleBase.equals(dumpedModule.base)) {
+            return false;
+        }
+        let reason = sp.add(0x8).readPointer();
+        if (reason.compare(ptr(4)) > 0) {
+            return false;
+        }
+    } else {
+        return false;
+    }
+
+    return true;
+}
+
+function skipTlsCallback(exceptionCtx) {
+    if (Process.arch == "x64") {
+        // Redirect to a `ret` instruction
+        exceptionCtx.rip = skipTlsInstr64;
+    }
+    else if (Process.arch == "ia32") {
+        // Redirect to a `ret 0xC` instruction
+        exceptionCtx.eip = skipTlsInstr32;
+    }
 }
 
 // Define available RPCs
@@ -71,11 +143,13 @@ rpc.exports = {
         let exceptionHandlerRegistered = false;
         let corExeMainHooked = false;
 
+        initializeTlsTrampolines();
+
         // If the target isn't a DLL, it should be loaded already
         if (!targetIsDll) {
             dumpedModule = Process.findModuleByName(moduleName);
             if (dumpedModule != null) {
-                changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expectedOepRanges);
+                changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expectedOepRanges, targetIsDll);
             }
         }
 
@@ -96,7 +170,7 @@ rpc.exports = {
 
                 if (targetIsDll) {
                     if (!exceptionHandlerRegistered) {
-                        changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expectedOepRanges);
+                        changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expectedOepRanges, targetIsDll);
                         exceptionHandlerRegistered = true;
                     }
                 }
