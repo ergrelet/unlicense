@@ -133,6 +133,35 @@ function skipTlsCallback(exceptionCtx) {
     }
 }
 
+
+function walk_back_stack_for_oep(context, module) {
+    const backtrace = Thread.backtrace(context, Backtracer.FUZZY);
+    if (backtrace.length == 0) {
+        return null;
+    }
+
+    const originalTextSection = Process.findRangeByAddress(backtrace[0]);
+    if (originalTextSection == null) {
+        return null;
+    }
+
+    const moduleStart = module.base;
+    const moduleEnd = module.base.add(module.size);
+    if (moduleStart.compare(originalTextSection.base) > 0 || moduleEnd.compare(originalTextSection.base) <= 0) {
+        return null;
+    }
+
+    let oepCandidate = null;
+    const textSectionStart = originalTextSection.base;
+    const textSectionEnd = originalTextSection.base.add(originalTextSection.size);
+    backtrace.forEach(addr => {
+        if (textSectionStart.compare(addr) <= 0 && textSectionEnd.compare(addr) > 0) {
+            oepCandidate = addr;
+        }
+    });
+    return oepCandidate;
+}
+
 // Define available RPCs
 rpc.exports = {
     setupOepTracing: function (moduleName, expectedOepRanges) {
@@ -141,6 +170,7 @@ rpc.exports = {
         let targetIsDll = moduleName.endsWith(".dll");
         let dumpedModule = null;
         let exceptionHandlerRegistered = false;
+        let queryPerformanceCounterHooked = false;
         let corExeMainHooked = false;
 
         initializeTlsTrampolines();
@@ -173,6 +203,27 @@ rpc.exports = {
                         changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expectedOepRanges, targetIsDll);
                         exceptionHandlerRegistered = true;
                     }
+                }
+
+                // Hook `kernel32.QueryPerformanceCounter` if present.
+                // This is used to detect an approximation of the entry point
+                // of Delphi executables which are not propely handled yet.
+                const queryPerformanceCounter = Module.findExportByName('kernel32', 'QueryPerformanceCounter');
+                if (queryPerformanceCounter != null && !queryPerformanceCounterHooked) {
+                    Interceptor.attach(queryPerformanceCounter, {
+                        onEnter: function (_args) {
+                            let oepCandidate = walk_back_stack_for_oep(this.context, dumpedModule);
+                            if (oepCandidate != null) {
+                                // "Rewind" call/jmp
+                                oepCandidate = oepCandidate.sub(5);
+                                log(`Potential OEP (thread #${this.threadId}): ${oepCandidate}`);
+                                send({ 'event': 'oep_reached', 'OEP': oepCandidate, 'BASE': dumpedModule.base, 'DOTNET': false })
+                                let sync_op = recv('block_on_oep', function (_value) { });
+                                sync_op.wait();
+                            }
+                        }
+                    });
+                    queryPerformanceCounterHooked = true;
                 }
 
                 // Hook `clr.InitializeFusion` if present.
