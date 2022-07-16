@@ -167,10 +167,18 @@ def _unwrap_iat(
                     process_controller.write_process_memory(
                         iat_range.base, list(new_iat_data))
                     return len(new_iat_data), resolved_import_count
-                LOG.debug("Resolved API: %s -> %s", hex(wrapper_start),
-                          hex(resolved_api))
-                new_iat_data += struct.pack(ptr_format, resolved_api)
-                resolved_import_count += 1
+
+                if resolved_api not in exports_dict:
+                    # TODO: Investigate. When TLS callbacks are used,
+                    # `kernel32.ExitProcess` might not be resolved properly.
+                    LOG.warn(
+                        "A resolved API isn't an export, it'll be ignored.")
+                    new_iat_data += struct.pack(ptr_format, 0)
+                else:
+                    LOG.debug("Resolved API: %s -> %s", hex(wrapper_start),
+                              hex(resolved_api))
+                    new_iat_data += struct.pack(ptr_format, resolved_api)
+                    resolved_import_count += 1
             elif wrapper_start in exports_dict:
                 # Not wrapped, add as is
                 new_iat_data += struct.pack(ptr_format, wrapper_start)

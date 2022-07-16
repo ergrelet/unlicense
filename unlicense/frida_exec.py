@@ -73,7 +73,8 @@ class FridaProcessController(ProcessController):
                                      ) -> Dict[int, Dict[str, Any]]:
         if self._exported_functions_cache is None or update_cache:
             value: List[Dict[
-                str, Any]] = self._frida_rpc.enumerate_exported_functions()
+                str, Any]] = self._frida_rpc.enumerate_exported_functions(
+                    self.main_module_name)
             exports_dict = {int(e["address"], 16): e for e in value}
             self._exported_functions_cache = exports_dict
             return exports_dict

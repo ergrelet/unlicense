@@ -270,11 +270,17 @@ rpc.exports = {
             return module != null && module.name.toUpperCase() == moduleName.toUpperCase();
         });
     },
-    enumerateExportedFunctions: function () {
+    enumerateExportedFunctions: function (excludedModuleName) {
         const modules = Process.enumerateModules();
         let exports = [];
-        modules.forEach(module => {
-            exports = exports.concat(module.enumerateExports());
+        modules.forEach(m => {
+            if (m.name != excludedModuleName) {
+                m.enumerateExports().forEach(e => {
+                    if (e.type == "function") {
+                        exports = exports.concat(e);
+                    }
+                });
+            }
         });
         return exports;
     },
