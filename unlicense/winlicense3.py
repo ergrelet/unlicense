@@ -140,7 +140,6 @@ def _unwrap_iat(
 
     exports_dict = process_controller.enumerate_exported_functions()
     new_iat_data = bytearray()
-    last_nullptr_offset = 0
     resolved_import_count = 0
     for current_page_addr in range(iat_range.base,
                                    iat_range.base + iat_range.size,
@@ -150,16 +149,12 @@ def _unwrap_iat(
         for i in range(0, len(data), process_controller.pointer_size):
             wrapper_start = struct.unpack(
                 ptr_format, data[i:i + process_controller.pointer_size])[0]
-            if wrapper_start == 0:
-                last_nullptr_offset = (current_page_addr - iat_range.base) + i
             # Wrappers are located in one of the module's section
             if in_main_module(wrapper_start):
                 resolved_api = resolve_wrapped_api(wrapper_start,
                                                    process_controller)
                 # Dumb check to detect the "end" of the IAT
                 if resolved_api is None:
-                    # Truncate the IAT before the last null pointer
-                    new_iat_data = new_iat_data[:last_nullptr_offset]
                     # Ensure the range is writable
                     process_controller.set_memory_protection(
                         iat_range.base, len(new_iat_data), "rw-")
