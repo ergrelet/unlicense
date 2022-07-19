@@ -51,6 +51,11 @@ class ProcessController(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
+    def find_export_by_name(self, module_name: str,
+                            export_name: str) -> Optional[int]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def enumerate_modules(self) -> List[str]:
         raise NotImplementedError
 

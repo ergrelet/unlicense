@@ -255,6 +255,15 @@ rpc.exports = {
         let range = Process.findRangeByAddress(ptr(address));
         return range == null ? undefined : range;
     },
+    findExportByName: function (module_name, export_name) {
+        let mod = Process.findModuleByName(module_name);
+        if (mod == null) {
+            return undefined;
+        }
+
+        let address = mod.findExportByName(export_name);
+        return address == null ? undefined : address;
+    },
     enumerateModules: function () {
         const modules = Process.enumerateModules();
         let moduleNames = [];

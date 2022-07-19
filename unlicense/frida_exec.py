@@ -53,6 +53,14 @@ class FridaProcessController(ProcessController):
             return None
         return self._frida_range_to_mem_range(value, include_data)
 
+    def find_export_by_name(self, module_name: str,
+                            export_name: str) -> Optional[int]:
+        export_address: Optional[str] = self._frida_rpc.find_export_by_name(
+            module_name, export_name)
+        if export_address is None:
+            return None
+        return int(export_address, 16)
+
     def enumerate_modules(self) -> List[str]:
         value: List[str] = self._frida_rpc.enumerate_modules()
         return value

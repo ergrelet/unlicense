@@ -7,6 +7,7 @@ from .emulation import resolve_wrapped_api
 from .process_control import ProcessController, MemoryRange, QueryProcessMemoryError
 
 LOG = logging.getLogger(__name__)
+IAT_MAX_SUCCESSIVE_FAILURES = 2
 
 
 def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
@@ -139,8 +140,12 @@ def _unwrap_iat(
         return False
 
     exports_dict = process_controller.enumerate_exported_functions()
+    exit_process_addr = process_controller.find_export_by_name(
+        "kernel32.dll", "ExitProcess")
     new_iat_data = bytearray()
     resolved_import_count = 0
+    successive_failures = 0
+    first_failure_offset = 0
     for current_page_addr in range(iat_range.base,
                                    iat_range.base + iat_range.size,
                                    process_controller.page_size):
@@ -153,8 +158,28 @@ def _unwrap_iat(
             if in_main_module(wrapper_start):
                 resolved_api = resolve_wrapped_api(wrapper_start,
                                                    process_controller)
+                if resolved_api not in exports_dict:
+                    if successive_failures == 0:
+                        first_failure_offset = len(new_iat_data)
+                    successive_failures += 1
+                    # Note: When TLS callbacks are used, `kernel32.ExitProcess`
+                    # is hooked via the IAT and thus might not resolved properly.
+                    new_iat_data += struct.pack(ptr_format, exit_process_addr)
+                else:
+                    LOG.debug("Resolved API: %s -> %s", hex(wrapper_start),
+                              hex(resolved_api))
+                    new_iat_data += struct.pack(ptr_format, resolved_api)
+                    resolved_import_count += 1
+                    if successive_failures > 0:
+                        LOG.warn(
+                            "A resolved API wasn't an export, "
+                            "it's been replaced with 'kernel32.ExitProcess'.")
+                        successive_failures = 0
+
                 # Dumb check to detect the "end" of the IAT
-                if resolved_api is None:
+                if resolved_api is None and successive_failures >= IAT_MAX_SUCCESSIVE_FAILURES:
+                    # Remove the last elements
+                    new_iat_data = new_iat_data[:first_failure_offset]
                     # Ensure the range is writable
                     process_controller.set_memory_protection(
                         iat_range.base, len(new_iat_data), "rw-")
@@ -162,22 +187,14 @@ def _unwrap_iat(
                     process_controller.write_process_memory(
                         iat_range.base, list(new_iat_data))
                     return len(new_iat_data), resolved_import_count
-
-                if resolved_api not in exports_dict:
-                    # TODO: Investigate. When TLS callbacks are used,
-                    # `kernel32.ExitProcess` might not be resolved properly.
-                    LOG.warn(
-                        "A resolved API isn't an export, it'll be ignored.")
-                    new_iat_data += struct.pack(ptr_format, 0)
-                else:
-                    LOG.debug("Resolved API: %s -> %s", hex(wrapper_start),
-                              hex(resolved_api))
-                    new_iat_data += struct.pack(ptr_format, resolved_api)
-                    resolved_import_count += 1
             elif wrapper_start in exports_dict:
                 # Not wrapped, add as is
                 new_iat_data += struct.pack(ptr_format, wrapper_start)
                 resolved_import_count += 1
+                if successive_failures > 0:
+                    LOG.warn("A resolved API wasn't an export, "
+                             "it's been replaced with 'kernel32.ExitProcess'.")
+                    successive_failures = 0
             else:
                 # Junk pointer (most likely null). Keep as null for alignment
                 new_iat_data += struct.pack(ptr_format, 0)
