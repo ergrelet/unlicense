@@ -6,6 +6,11 @@ const reset = "\x1b[0m"
 let allocatedBuffers = [];
 let originalPageProtections = new Map();
 
+// DLLs-related
+let skipDllOepInstr32 = null;
+let skipDllOepInstr64 = null;
+let dllOepCandidate = null;
+
 // TLS-related
 let skipTlsInstr32 = null;
 let skipTlsInstr64 = null;
@@ -15,9 +20,13 @@ function log(message) {
     console.log(`${green}frida-agent${reset}: ${message}`);
 }
 
-function initializeTlsTrampolines() {
-    // ret; ret 0xC
-    const instructionsBytes = new Uint8Array([0xC3, 0xC2, 0x0C, 0x00]);
+function initializeTrampolines() {
+    const instructionsBytes = new Uint8Array([
+        0xC3,                                          // ret
+        0xC2, 0x0C, 0x00,                              // ret 0x0C
+        0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3,            // mov eax, 1; ret
+        0xB8, 0x01, 0x00, 0x00, 0x00, 0xC2, 0x0C, 0x00 // mov eax, 1; ret 0x0C
+    ]);
 
     let bufferPointer = Memory.alloc(instructionsBytes.length);
     Memory.protect(bufferPointer, instructionsBytes.length, 'rwx');
@@ -25,6 +34,8 @@ function initializeTlsTrampolines() {
 
     skipTlsInstr64 = bufferPointer;
     skipTlsInstr32 = bufferPointer.add(0x1);
+    skipDllOepInstr64 = bufferPointer.add(0x4);
+    skipDllOepInstr32 = bufferPointer.add(0xA);
 }
 
 function rangeContainsAddress(range, address) {
@@ -82,9 +93,21 @@ function changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expected
                     Memory.protect(ptr(address_str), size, originalProtection);
                 });
 
-                // Report the potential OEP
                 let threadId = Process.getCurrentThreadId();
-                log(`Potential OEP (thread #${threadId}): ${oepCandidate} `);
+                log(`OEP found (thread #${threadId}): ${oepCandidate}`);
+                if (moduleIsDll) {
+                    // Save the potential OEP and and skip `DllMain` (`DLL_PROCESS_ATTACH`).
+                    // Note: When dumping DLLs we have to release the loader
+                    // lock before starting to dump.
+                    // Other threads might call `DllMain` with the `DLL_THREAD_ATTACH`
+                    // reason later on but it's okay.
+                    dllOepCandidate = oepCandidate;
+                    skipDllEntryPoint(exp.context);
+                    expectionHandled = true;
+                    return;
+                }
+
+                // Report the potential OEP
                 notifyOepFound(dumpedModule, oepCandidate);
             }
         });
@@ -138,6 +161,16 @@ function skipTlsCallback(exceptionCtx) {
     }
 }
 
+function skipDllEntryPoint(exceptionCtx) {
+    if (Process.arch == "x64") {
+        // Redirect to a `mov eax, 1; ret` instructions
+        exceptionCtx.rip = skipDllOepInstr64;
+    }
+    else if (Process.arch == "ia32") {
+        // Redirect to a `mov eax, 1; ret 0xC` instructions
+        exceptionCtx.eip = skipDllOepInstr32;
+    }
+}
 
 function walk_back_stack_for_oep(context, module) {
     const backtrace = Thread.backtrace(context, Backtracer.FUZZY);
@@ -178,7 +211,7 @@ rpc.exports = {
         let queryPerformanceCounterHooked = false;
         let corExeMainHooked = false;
 
-        initializeTlsTrampolines();
+        initializeTrampolines();
 
         // If the target isn't a DLL, it should be loaded already
         if (!targetIsDll) {
@@ -188,9 +221,21 @@ rpc.exports = {
             }
         }
 
-        // Hook `ntdll.RtlActivateActivationContextUnsafeFast` as a mean to get
-        // called after new PE images are loaded and before their entry point
-        // is called. Needed to unpack DLLs.
+        // Hook `ntdll.LdrLoadDll` on exit to get called at a point where the
+        // loader lock is released. Needed to unpack (32-bit) DLLs.
+        const loadDll = Module.findExportByName('ntdll', 'LdrLoadDll');
+        Interceptor.attach(loadDll, {
+            onLeave: function (_args) {
+                // If `dllOepCandidate` is set, proceed with the dumping
+                if (dllOepCandidate != null) {
+                    notifyOepFound(dumpedModule, dllOepCandidate);
+                }
+            }
+        });
+
+        // Hook `ntdll.RtlActivateActivationContextUnsafeFast` on exit as a mean
+        // to get called after new PE images are loaded and before their entry
+        // point is called. Needed to unpack DLLs.
         const activateActivationContext = Module.findExportByName('ntdll', 'RtlActivateActivationContextUnsafeFast');
         Interceptor.attach(activateActivationContext, {
             onLeave: function (_args) {
@@ -222,7 +267,7 @@ rpc.exports = {
                             if (oepCandidate != null) {
                                 // "Rewind" call/jmp
                                 oepCandidate = oepCandidate.sub(5);
-                                log(`Potential OEP (thread #${this.threadId}): ${oepCandidate} `);
+                                log(`Potential OEP (thread #${this.threadId}): ${oepCandidate} (inaccurate)`);
                                 notifyOepFound(dumpedModule, oepCandidate);
                             }
                         }
@@ -237,7 +282,7 @@ rpc.exports = {
                 if (corExeMain != null && !corExeMainHooked) {
                     Interceptor.attach(corExeMain, {
                         onEnter: function (_args) {
-                            log(`Potential.NET assembly entry (thread #${this.threadId})`);
+                            log(`.NET assembly loaded (thread #${this.threadId})`);
                             notifyOepFound(dumpedModule, '0');
                         }
                     });
