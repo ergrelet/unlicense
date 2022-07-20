@@ -33,6 +33,13 @@ function rangeContainsAddress(range, address) {
     return rangeStart.compare(address) <= 0 && rangeEnd.compare(address) > 0;
 }
 
+function notifyOepFound(dumpedModule, oepCandidate) {
+    let isDotNetInitialized = isDotNetProcess();
+    send({ 'event': 'oep_reached', 'OEP': oepCandidate, 'BASE': dumpedModule.base, 'DOTNET': isDotNetInitialized })
+    let sync_op = recv('block_on_oep', function (_value) { });
+    sync_op.wait();
+}
+
 function isDotNetProcess() {
     return Process.findModuleByName("clr.dll") != null;
 }
@@ -40,10 +47,10 @@ function isDotNetProcess() {
 function changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expectedOepRanges, moduleIsDll) {
     // Ensure potential OEP ranges are not executable by default
     expectedOepRanges.forEach((oepRange) => {
-        let textSectionStart = dumpedModule.base.add(oepRange[0]);
-        let textSectionSize = oepRange[1];
-        Memory.protect(textSectionStart, textSectionSize, 'rw-');
-        originalPageProtections.set(textSectionStart.toString(), [textSectionSize, "r-x"]);
+        const sectionStart = dumpedModule.base.add(oepRange[0]);
+        const expectedSectionSize = oepRange[1];
+        Memory.protect(sectionStart, expectedSectionSize, 'rw-');
+        originalPageProtections.set(sectionStart.toString(), [expectedSectionSize, "r-x"]);
     });
 
     // Register an exception handler that'll detect the OEP
@@ -51,11 +58,11 @@ function changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expected
         let expectionHandled = false;
         let oepCandidate = exp.context.pc;
         expectedOepRanges.forEach((oepRange) => {
-            let textSectionStart = dumpedModule.base.add(oepRange[0]);
-            let textSectionSize = oepRange[1];
-            let textSectionRange = { base: textSectionStart, size: textSectionSize };
+            const sectionStart = dumpedModule.base.add(oepRange[0]);
+            const sectionSize = oepRange[1];
+            const sectionRange = { base: sectionStart, size: sectionSize };
 
-            if (rangeContainsAddress(textSectionRange, oepCandidate)) {
+            if (rangeContainsAddress(sectionRange, oepCandidate)) {
                 // If we're in a TLS callback, the first argument is the
                 // module's base address
                 if (!moduleIsDll && isTlsCallback(exp.context, dumpedModule)) {
@@ -67,7 +74,6 @@ function changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expected
                     expectionHandled = true;
                     return;
                 }
-                log(`Potential OEP: ${oepCandidate}`);
 
                 // Restore pages' intended protections
                 originalPageProtections.forEach((pair, address_str, _map) => {
@@ -77,10 +83,9 @@ function changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expected
                 });
 
                 // Report the potential OEP
-                let isDotNetInitialized = isDotNetProcess();
-                send({ 'event': 'oep_reached', 'OEP': oepCandidate, 'BASE': dumpedModule.base, 'DOTNET': isDotNetInitialized })
-                let sync_op = recv('block_on_oep', function (_value) { });
-                sync_op.wait();
+                let threadId = Process.getCurrentThreadId();
+                log(`Potential OEP (thread #${threadId}): ${oepCandidate} `);
+                notifyOepFound(dumpedModule, oepCandidate);
             }
         });
 
@@ -183,10 +188,11 @@ rpc.exports = {
             }
         }
 
-        // Hook `ntdll.NtMapViewOfSection` as a mean to get called when new PE
-        // images are loaded. Needed to unpack DLLs.
-        const ntMapViewOfSection = Module.findExportByName('ntdll', 'NtMapViewOfSection');
-        Interceptor.attach(ntMapViewOfSection, {
+        // Hook `ntdll.RtlActivateActivationContextUnsafeFast` as a mean to get
+        // called after new PE images are loaded and before their entry point
+        // is called. Needed to unpack DLLs.
+        const activateActivationContext = Module.findExportByName('ntdll', 'RtlActivateActivationContextUnsafeFast');
+        Interceptor.attach(activateActivationContext, {
             onLeave: function (_args) {
                 if (dumpedModule == null) {
                     dumpedModule = Process.findModuleByName(moduleName);
@@ -216,10 +222,8 @@ rpc.exports = {
                             if (oepCandidate != null) {
                                 // "Rewind" call/jmp
                                 oepCandidate = oepCandidate.sub(5);
-                                log(`Potential OEP (thread #${this.threadId}): ${oepCandidate}`);
-                                send({ 'event': 'oep_reached', 'OEP': oepCandidate, 'BASE': dumpedModule.base, 'DOTNET': false })
-                                let sync_op = recv('block_on_oep', function (_value) { });
-                                sync_op.wait();
+                                log(`Potential OEP (thread #${this.threadId}): ${oepCandidate} `);
+                                notifyOepFound(dumpedModule, oepCandidate);
                             }
                         }
                     });
@@ -233,10 +237,8 @@ rpc.exports = {
                 if (corExeMain != null && !corExeMainHooked) {
                     Interceptor.attach(corExeMain, {
                         onEnter: function (_args) {
-                            log(`Potential .NET assembly entry (thread #${this.threadId})`);
-                            send({ 'event': 'oep_reached', 'OEP': '0', 'BASE': dumpedModule.base, 'DOTNET': true })
-                            let sync_op = recv('block_on_oep', function (_value) { });
-                            sync_op.wait();
+                            log(`Potential.NET assembly entry (thread #${this.threadId})`);
+                            notifyOepFound(dumpedModule, '0');
                         }
                     });
                     corExeMainHooked = true;
