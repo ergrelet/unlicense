@@ -46,6 +46,9 @@ function rangeContainsAddress(range, address) {
 
 function notifyOepFound(dumpedModule, oepCandidate) {
     let isDotNetInitialized = isDotNetProcess();
+
+    restoreIntendedPagesProtections()
+
     send({ 'event': 'oep_reached', 'OEP': oepCandidate, 'BASE': dumpedModule.base, 'DOTNET': isDotNetInitialized })
     let sync_op = recv('block_on_oep', function (_value) { });
     sync_op.wait();
@@ -55,19 +58,51 @@ function isDotNetProcess() {
     return Process.findModuleByName("clr.dll") != null;
 }
 
-function changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expectedOepRanges, moduleIsDll) {
-    // Ensure potential OEP ranges are not executable by default
+function makeOepRangesInaccessible(dumpedModule, expectedOepRanges) {
+    // Ensure potential OEP ranges are not accessible
     expectedOepRanges.forEach((oepRange) => {
         const sectionStart = dumpedModule.base.add(oepRange[0]);
         const expectedSectionSize = oepRange[1];
-        Memory.protect(sectionStart, expectedSectionSize, 'rw-');
+        Memory.protect(sectionStart, expectedSectionSize, '---');
         originalPageProtections.set(sectionStart.toString(), [expectedSectionSize, "r-x"]);
     });
+}
 
+function restoreIntendedPagesProtections() {
+    // Restore pages' intended protections
+    originalPageProtections.forEach((pair, address_str, _map) => {
+        let size = pair[0];
+        let originalProtection = pair[1];
+        Memory.protect(ptr(address_str), size, originalProtection);
+    });
+}
+
+function registerExceptionHandler(dumpedModule, expectedOepRanges, moduleIsDll) {
     // Register an exception handler that'll detect the OEP
     Process.setExceptionHandler(exp => {
-        let expectionHandled = false;
         let oepCandidate = exp.context.pc;
+        let threadId = Process.getCurrentThreadId();
+
+        if (exp.memory != null) {
+            // Weird case where executing code actually only triggers a "read"
+            // access violation on inaccessible pages. This can happen on some
+            // 32-bit executables.
+            if (exp.memory.operation == "read" && exp.memory.address.equals(exp.context.pc)) {
+                log(`OEP found (thread #${threadId}): ${oepCandidate}`);
+                // Report the potential OEP
+                notifyOepFound(dumpedModule, oepCandidate);
+            }
+
+            // If the access violation is not an execution, "allow" the operation.
+            // Note: Pages will be reprotected on the next call to
+            // `NtProtectVirtualMemory`.
+            if (exp.memory.operation != "execute") {
+                Memory.protect(exp.memory.address, Process.pageSize, "rw-");
+                return true;
+            }
+        }
+
+        let expectionHandled = false;
         expectedOepRanges.forEach((oepRange) => {
             const sectionStart = dumpedModule.base.add(oepRange[0]);
             const sectionSize = oepRange[1];
@@ -86,14 +121,6 @@ function changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expected
                     return;
                 }
 
-                // Restore pages' intended protections
-                originalPageProtections.forEach((pair, address_str, _map) => {
-                    let size = pair[0];
-                    let originalProtection = pair[1];
-                    Memory.protect(ptr(address_str), size, originalProtection);
-                });
-
-                let threadId = Process.getCurrentThreadId();
                 log(`OEP found (thread #${threadId}): ${oepCandidate}`);
                 if (moduleIsDll) {
                     // Save the potential OEP and and skip `DllMain` (`DLL_PROCESS_ATTACH`).
@@ -103,6 +130,7 @@ function changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expected
                     // reason later on but it's okay.
                     dllOepCandidate = oepCandidate;
                     skipDllEntryPoint(exp.context);
+                    restoreIntendedPagesProtections();
                     expectionHandled = true;
                     return;
                 }
@@ -207,18 +235,12 @@ rpc.exports = {
 
         let targetIsDll = moduleName.endsWith(".dll");
         let dumpedModule = null;
-        let exceptionHandlerRegistered = false;
-        let queryPerformanceCounterHooked = false;
-        let corExeMainHooked = false;
 
         initializeTrampolines();
 
         // If the target isn't a DLL, it should be loaded already
         if (!targetIsDll) {
             dumpedModule = Process.findModuleByName(moduleName);
-            if (dumpedModule != null) {
-                changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expectedOepRanges, targetIsDll);
-            }
         }
 
         // Hook `ntdll.LdrLoadDll` on exit to get called at a point where the
@@ -233,9 +255,29 @@ rpc.exports = {
             }
         });
 
+        let exceptionHandlerRegistered = false;
+        const ntProtectVirtualMemory = Module.findExportByName('ntdll', 'NtProtectVirtualMemory');
+        if (ntProtectVirtualMemory != null) {
+            Interceptor.attach(ntProtectVirtualMemory, {
+                onEnter: function (args) {
+                    let addr = args[1].readPointer();
+                    if (dumpedModule != null && addr.equals(dumpedModule.base)) {
+                        // Reset potential OEP ranges to not accessible to
+                        // (hopefully) catch the entry point next time.
+                        makeOepRangesInaccessible(dumpedModule, expectedOepRanges);
+                        if (!exceptionHandlerRegistered) {
+                            registerExceptionHandler(dumpedModule, expectedOepRanges, targetIsDll);
+                            exceptionHandlerRegistered = true;
+                        }
+                    }
+                }
+            });
+        }
+
         // Hook `ntdll.RtlActivateActivationContextUnsafeFast` on exit as a mean
         // to get called after new PE images are loaded and before their entry
         // point is called. Needed to unpack DLLs.
+        let initializeFusionHooked = false;
         const activateActivationContext = Module.findExportByName('ntdll', 'RtlActivateActivationContextUnsafeFast');
         Interceptor.attach(activateActivationContext, {
             onLeave: function (_args) {
@@ -251,42 +293,24 @@ rpc.exports = {
 
                 if (targetIsDll) {
                     if (!exceptionHandlerRegistered) {
-                        changePageProtectionsAndRegisterExceptionHandler(dumpedModule, expectedOepRanges, targetIsDll);
+                        makeOepRangesInaccessible(dumpedModule, expectedOepRanges);
+                        registerExceptionHandler(dumpedModule, expectedOepRanges, targetIsDll);
                         exceptionHandlerRegistered = true;
                     }
-                }
-
-                // Hook `kernel32.QueryPerformanceCounter` if present.
-                // This is used to detect an approximation of the entry point
-                // of Delphi executables which are not propely handled yet.
-                const queryPerformanceCounter = Module.findExportByName('kernel32', 'QueryPerformanceCounter');
-                if (queryPerformanceCounter != null && !queryPerformanceCounterHooked) {
-                    Interceptor.attach(queryPerformanceCounter, {
-                        onEnter: function (_args) {
-                            let oepCandidate = walk_back_stack_for_oep(this.context, dumpedModule);
-                            if (oepCandidate != null) {
-                                // "Rewind" call/jmp
-                                oepCandidate = oepCandidate.sub(5);
-                                log(`Potential OEP (thread #${this.threadId}): ${oepCandidate} (inaccurate)`);
-                                notifyOepFound(dumpedModule, oepCandidate);
-                            }
-                        }
-                    });
-                    queryPerformanceCounterHooked = true;
                 }
 
                 // Hook `clr.InitializeFusion` if present.
                 // This is used to detect a good point during the CLR's
                 // initialization, to dump .NET EXE assemblies
-                const corExeMain = Module.findExportByName('clr', 'InitializeFusion');
-                if (corExeMain != null && !corExeMainHooked) {
-                    Interceptor.attach(corExeMain, {
+                const initializeFusion = Module.findExportByName('clr', 'InitializeFusion');
+                if (initializeFusion != null && !initializeFusionHooked) {
+                    Interceptor.attach(initializeFusion, {
                         onEnter: function (_args) {
                             log(`.NET assembly loaded (thread #${this.threadId})`);
                             notifyOepFound(dumpedModule, '0');
                         }
                     });
-                    corExeMainHooked = true;
+                    initializeFusionHooked = true;
                 }
             }
         });

@@ -4,7 +4,7 @@
 ### Fixed
 - Fix a couple of bugs with the IAT search and resolution for Themida/Winlicense 3.x
 - Fix potentially invalid IAT truncations for Themida/WinLicense 3.x
-- OEP detection now recovers OEPs of native executables with virtualized entry points
+- OEP detection now works in a runtime-agnostic manner (and handles virtualized entry points and Delphi executables)
 - TLS callbacks are now properly detected and skipped
 
 ## [0.2.0] - 2022-05-31

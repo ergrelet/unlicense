@@ -19,7 +19,6 @@ Note: You need to use a 32-bit Python interpreter to dump 32-bit executables.
 ## Known Limitations
 
 * Doesn't handle .NET assembly DLLs
-* Doesn't recover OEPs accurately for Delphi executables
 * Doesn't produce runnable dumps in most cases
 * Resolving imports for 32-bit executables packed with Themida 2.x is pretty slow
 
