@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.3.0] - 2022-07-22
 ### Fixed
 - Fix a couple of bugs with the IAT search and resolution for Themida/Winlicense 3.x
 - Fix potentially invalid IAT truncations for Themida/WinLicense 3.x

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "unlicense"
-version = "0.2.0"
+version = "0.3.0"
 description = "Unpack executables protected with Themida/WinLicense 2.x and 3.x"
 authors = ["Erwan Grelet"]
 license = "GPL-3.0-or-later"
