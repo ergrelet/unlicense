@@ -8,7 +8,7 @@ python-versions = "*"
 
 [[package]]
 name = "astroid"
-version = "2.11.5"
+version = "2.11.7"
 description = "An abstract syntax tree for Python with inference support."
 category = "dev"
 optional = false
@@ -29,7 +29,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
 [[package]]
 name = "colorama"
-version = "0.4.4"
+version = "0.4.5"
 description = "Cross-platform colored terminal text."
 category = "dev"
 optional = false
@@ -60,7 +60,7 @@ termcolor = "*"
 
 [[package]]
 name = "frida"
-version = "15.1.23"
+version = "15.2.2"
 description = "Dynamic instrumentation toolkit for developers, reverse-engineers, and security researchers"
 category = "main"
 optional = false
@@ -192,7 +192,7 @@ hook_testing = ["pytest (>=2.7.3)", "execnet (>=1.5.0)", "psutil"]
 
 [[package]]
 name = "pyinstaller-hooks-contrib"
-version = "2022.6"
+version = "2022.8"
 description = "Community maintained hooks for PyInstaller"
 category = "dev"
 optional = false
@@ -200,24 +200,26 @@ python-versions = ">=3.7"
 
 [[package]]
 name = "pylint"
-version = "2.13.9"
+version = "2.14.5"
 description = "python code static checker"
 category = "dev"
 optional = false
-python-versions = ">=3.6.2"
+python-versions = ">=3.7.2"
 
 [package.dependencies]
-astroid = ">=2.11.5,<=2.12.0-dev0"
-colorama = {version = "*", markers = "sys_platform == \"win32\""}
+astroid = ">=2.11.6,<=2.12.0-dev0"
+colorama = {version = ">=0.4.5", markers = "sys_platform == \"win32\""}
 dill = ">=0.2"
 isort = ">=4.2.5,<6"
 mccabe = ">=0.6,<0.8"
 platformdirs = ">=2.2.0"
 tomli = {version = ">=1.1.0", markers = "python_version < \"3.11\""}
+tomlkit = ">=0.10.1"
 typing-extensions = {version = ">=3.10.0", markers = "python_version < \"3.10\""}
 
 [package.extras]
-testutil = ["gitpython (>3)"]
+spelling = ["pyenchant (>=3.2,<4.0)"]
+testutils = ["gitpython (>3)"]
 
 [[package]]
 name = "pyscylla"
@@ -268,8 +270,16 @@ optional = false
 python-versions = ">=3.7"
 
 [[package]]
+name = "tomlkit"
+version = "0.11.1"
+description = "Style preserving TOML library"
+category = "dev"
+optional = false
+python-versions = ">=3.6,<4.0"
+
+[[package]]
 name = "typing-extensions"
-version = "4.2.0"
+version = "4.3.0"
 description = "Backported and Experimental Type Hints for Python 3.7+"
 category = "dev"
 optional = false
@@ -309,8 +319,8 @@ python-versions = "*"
 
 [metadata]
 lock-version = "1.1"
-python-versions = "^3.8, <=3.10"
-content-hash = "4743c8801e6175972e968a409efac74fd51bcca8b5d3ab587a0704349867fc3b"
+python-versions = "^3.8, <3.11"
+content-hash = "e5b08d05cbd6154f944b14537ac169e3112651e0309b1a83e9cf3ec5055929ca"
 
 [metadata.files]
 altgraph = [
@@ -318,8 +328,8 @@ altgraph = [
     {file = "altgraph-0.17.2.tar.gz", hash = "sha256:ebf2269361b47d97b3b88e696439f6e4cbc607c17c51feb1754f90fb79839158"},
 ]
 astroid = [
-    {file = "astroid-2.11.5-py3-none-any.whl", hash = "sha256:14ffbb4f6aa2cf474a0834014005487f7ecd8924996083ab411e7fa0b508ce0b"},
-    {file = "astroid-2.11.5.tar.gz", hash = "sha256:f4e4ec5294c4b07ac38bab9ca5ddd3914d4bf46f9006eb5c0ae755755061044e"},
+    {file = "astroid-2.11.7-py3-none-any.whl", hash = "sha256:86b0a340a512c65abf4368b80252754cda17c02cdbbd3f587dddf98112233e7b"},
+    {file = "astroid-2.11.7.tar.gz", hash = "sha256:bb24615c77f4837c707669d16907331374ae8a964650a66999da3f5ca68dc946"},
 ]
 capstone = [
     {file = "capstone-4.0.2-py2.py3-none-manylinux1_i686.whl", hash = "sha256:da442f979414cf27e4621e70e835880878c858ea438c4f0e957e132593579e37"},
@@ -329,8 +339,8 @@ capstone = [
     {file = "capstone-4.0.2.tar.gz", hash = "sha256:2842913092c9b69fd903744bc1b87488e1451625460baac173056e1808ec1c66"},
 ]
 colorama = [
-    {file = "colorama-0.4.4-py2.py3-none-any.whl", hash = "sha256:9f47eda37229f68eee03b24b9748937c7dc3868f906e8ba69fbcbdd3bc5dc3e2"},
-    {file = "colorama-0.4.4.tar.gz", hash = "sha256:5941b2b48a20143d2267e95b1c2a7603ce057ee39fd88e7329b0c292aa16869b"},
+    {file = "colorama-0.4.5-py2.py3-none-any.whl", hash = "sha256:854bf444933e37f5824ae7bfc1e98d5bce2ebe4160d46b5edf346a89358e99da"},
+    {file = "colorama-0.4.5.tar.gz", hash = "sha256:e6c6b4334fc50988a639d9b98aa429a0b57da6e17b9a44f0451f930b6967b7a4"},
 ]
 dill = [
     {file = "dill-0.3.5.1-py2.py3-none-any.whl", hash = "sha256:33501d03270bbe410c72639b350e941882a8b0fd55357580fbc873fba0c59302"},
@@ -340,26 +350,26 @@ fire = [
     {file = "fire-0.4.0.tar.gz", hash = "sha256:c5e2b8763699d1142393a46d0e3e790c5eb2f0706082df8f647878842c216a62"},
 ]
 frida = [
-    {file = "frida-15.1.23-py2.7-linux-aarch64.egg", hash = "sha256:e82efcfb8c2f8e26687806f4b1c85872502cbbcfe1752ed0f2590ee7e97aa6a5"},
-    {file = "frida-15.1.23-py2.7-linux-armv7l.egg", hash = "sha256:7eca72893f58582cf80dcb08f3bc492d8c5990ccef9defd436987601eb157498"},
-    {file = "frida-15.1.23-py2.7-linux-i686.egg", hash = "sha256:1be639756f4272e6759cc883e39ec15a975101d56facc1078c9c6121de6823a8"},
-    {file = "frida-15.1.23-py2.7-linux-x86_64.egg", hash = "sha256:e44f05ac78c03f52d56d987f455d783f3967e07e2f7705a25596524f4aae3226"},
-    {file = "frida-15.1.23-py2.7-macosx-10.9-x86_64.egg", hash = "sha256:dd7a9fb7f2de7e59631293b4f1278b26d604f750890dc467bb2d12395d7feb80"},
-    {file = "frida-15.1.23-py2.7-macosx-11.0-fat64.egg", hash = "sha256:7f946e1877c489a9257c293c2290385ae3e03e13071826dec7c7e39c4f072ba1"},
-    {file = "frida-15.1.23-py2.7-win-amd64.egg", hash = "sha256:1695059cea404c019082d3dd0f1e7b94f90444174a83e250e74991480e0d2d6c"},
-    {file = "frida-15.1.23-py2.7-win32.egg", hash = "sha256:db2cd3939cc61455929e02b1fc1c396fc13dcd0d5749780065612241c0990d35"},
-    {file = "frida-15.1.23-py3.10-win-amd64.egg", hash = "sha256:76cde6cd9ca22f3a3618d96f337837fd946d4ca4e1432fef469c4b39a6a672f0"},
-    {file = "frida-15.1.23-py3.10-win32.egg", hash = "sha256:30857cab52900dbb11e5b442e69b33368aabfd92f43dd3ba97a7741136bbbd0d"},
-    {file = "frida-15.1.23-py3.6-linux-aarch64.egg", hash = "sha256:cf3f5c8576381ef895e0b09c844843823d205c0630d5f16839c20f43775a3899"},
-    {file = "frida-15.1.23-py3.6-linux-armv7l.egg", hash = "sha256:b52657586356298c470ea883a10809b3e1527db8576a39af2a29dfcf53005de4"},
-    {file = "frida-15.1.23-py3.8-android-aarch64.egg", hash = "sha256:a0368e20396c32896dd44bd24f9788aaa1a6368ba3bf3506ccfd4f5c19d74526"},
-    {file = "frida-15.1.23-py3.8-freebsd-amd64.egg", hash = "sha256:96bfe54a67845b02c79044a009e6a0bf405923c0c24d9e59621d6a17d324e6dd"},
-    {file = "frida-15.1.23-py3.8-freebsd-arm64.egg", hash = "sha256:5dd2b4d423d141fde158e10fabf2df90d9058b922de9ccedbe69accaf65da337"},
-    {file = "frida-15.1.23-py3.8-linux-i686.egg", hash = "sha256:c8ee0984c57e9f9dd4f7eba912a93919d97bd3bbe22855de3fa8aebd6fbb386a"},
-    {file = "frida-15.1.23-py3.8-linux-x86_64.egg", hash = "sha256:da20be5bb4a66288607de24f2e6bbafcf380808b480f0aeeeee0e8ab61582bb8"},
-    {file = "frida-15.1.23-py3.8-macosx-10.9-x86_64.egg", hash = "sha256:50810d4f7bf1601a6d9329d64e08ecaf8f0d991008fa44ed582ed00ba56625d5"},
-    {file = "frida-15.1.23-py3.8-macosx-11.0-arm64.egg", hash = "sha256:28053b96c35593eb5b89ebb58d892c29ee44438b0d33905187c68caa8d67aad2"},
-    {file = "frida-15.1.23.tar.gz", hash = "sha256:810638e012790f9924eea92a3dfb51ef38eb0ac013467c1b3e544e55509b49a6"},
+    {file = "frida-15.2.2-py2.7-linux-aarch64.egg", hash = "sha256:909ef1dbf8ce8a88a283cc1599b8d8124ee4eab82281530bd4e83a8ce7f8b95c"},
+    {file = "frida-15.2.2-py2.7-linux-armv7l.egg", hash = "sha256:da235abe6972d1b166b5a0bb7d4d1dccedd58bdd0baedfe9ca3c83a612a458c0"},
+    {file = "frida-15.2.2-py2.7-linux-i686.egg", hash = "sha256:36e1d9ef6c0b8a58a0bd392f67ce9b0a108969a44bdfbf7a39b9c7ce2e212e95"},
+    {file = "frida-15.2.2-py2.7-linux-x86_64.egg", hash = "sha256:ca3dd74df160b20b953b9ada25d320174accc4422afe47e8c4819cb7c294acad"},
+    {file = "frida-15.2.2-py2.7-macosx-10.9-x86_64.egg", hash = "sha256:976cd6d8018e7cd426621ac94c38d532c01ab5e38b8f3008bb8f8c5554afc258"},
+    {file = "frida-15.2.2-py2.7-macosx-11.0-fat64.egg", hash = "sha256:ea7f17bd296db60392848b94fd07fab28d88bd9b6e7b91974a646eaa23c65120"},
+    {file = "frida-15.2.2-py2.7-win-amd64.egg", hash = "sha256:dc76443ac10242bc5ac8930df0d48d6d93b6cb5b51e18ea111942bf197047d83"},
+    {file = "frida-15.2.2-py2.7-win32.egg", hash = "sha256:ac655e43629196186be254083cb31f6eae99cbb4eb7163858d58f51fe126adf1"},
+    {file = "frida-15.2.2-py3.10-win-amd64.egg", hash = "sha256:62dc979344efd04a139f1c8546a6c17f14ffa5f7719b5c33577e243341fd994e"},
+    {file = "frida-15.2.2-py3.10-win32.egg", hash = "sha256:67b071e8bcd6bec1d07b06ad86dd980de904a290c813ab9d114571efae8c6129"},
+    {file = "frida-15.2.2-py3.6-linux-aarch64.egg", hash = "sha256:6895927efe0d213760a3d1070b95c45d6201fdacb0f513652afc453016831224"},
+    {file = "frida-15.2.2-py3.6-linux-armv7l.egg", hash = "sha256:a4c7960faa411c489fbe679c929631a8501db02d4aa3ce5a7f0d323d34982cbd"},
+    {file = "frida-15.2.2-py3.8-android-aarch64.egg", hash = "sha256:d63093afd44aed575c2fa6eda4e5085c77332a7bc14e03cdb1670ca3db567f19"},
+    {file = "frida-15.2.2-py3.8-freebsd-arm64.egg", hash = "sha256:e7aa6c4e618d7d0a1506018751bc20f41dfa05abb7806a3c107b3b2f55053dd0"},
+    {file = "frida-15.2.2-py3.8-linux-i686.egg", hash = "sha256:6c3d06f174fd8356b61074527a997815c7cba304f8bde80636477c4b4edee438"},
+    {file = "frida-15.2.2-py3.8-linux-x86_64.egg", hash = "sha256:6b7781266029f0c36b7af10ac4cbbab107917036f5d289dfd1fa1e9155548dc2"},
+    {file = "frida-15.2.2-py3.8-macosx-10.9-x86_64.egg", hash = "sha256:378ebf782cf750ebc44d03800e48da613feabd3de50b4a08c0bcb86f75912072"},
+    {file = "frida-15.2.2-py3.8-macosx-11.0-arm64.egg", hash = "sha256:1fdeb1d26f39012481167fe2f2807adf5e4c3fd5d4b5531fff16618bbe22f05f"},
+    {file = "frida-15.2.2-py3.9-freebsd-amd64.egg", hash = "sha256:4f4f373c9d0e011eb433503e3381f9ff518dd3be5c11b1ec431e31f21da3afde"},
+    {file = "frida-15.2.2.tar.gz", hash = "sha256:76e2cd9d4ce0559d0132201ff087fd31205e8e26ef590eeba89cbdad582ecb59"},
 ]
 future = [
     {file = "future-0.18.2.tar.gz", hash = "sha256:b1bead90b70cf6ec3f0710ae53a525360fa360d306a86583adc6bf83a4db537d"},
@@ -493,12 +503,12 @@ pyinstaller = [
     {file = "pyinstaller-4.10.tar.gz", hash = "sha256:7749c868d2e2dc84df7d6f65437226183c8a366f3a99bb2737785625c3a3cca1"},
 ]
 pyinstaller-hooks-contrib = [
-    {file = "pyinstaller-hooks-contrib-2022.6.tar.gz", hash = "sha256:9dc611cf6667301e95384b4a0631b032bbffa16a0688f4cfa014d0c1e751d276"},
-    {file = "pyinstaller_hooks_contrib-2022.6-py2.py3-none-any.whl", hash = "sha256:e38bf9266c57be19647762ee63b012683beb6919c6bc2ecdc66ca174edec44a0"},
+    {file = "pyinstaller-hooks-contrib-2022.8.tar.gz", hash = "sha256:c4210fc50282c9c6a918e485e0bfae9405592390508e3be9fde19acc2213da56"},
+    {file = "pyinstaller_hooks_contrib-2022.8-py2.py3-none-any.whl", hash = "sha256:e46f099934dd4577fb1ddcf37a99fa04027c92f8f5291c8802f326345988d001"},
 ]
 pylint = [
-    {file = "pylint-2.13.9-py3-none-any.whl", hash = "sha256:705c620d388035bdd9ff8b44c5bcdd235bfb49d276d488dd2c8ff1736aa42526"},
-    {file = "pylint-2.13.9.tar.gz", hash = "sha256:095567c96e19e6f57b5b907e67d265ff535e588fe26b12b5ebe1fc5645b2c731"},
+    {file = "pylint-2.14.5-py3-none-any.whl", hash = "sha256:fabe30000de7d07636d2e82c9a518ad5ad7908590fe135ace169b44839c15f90"},
+    {file = "pylint-2.14.5.tar.gz", hash = "sha256:487ce2192eee48211269a0e976421f334cf94de1806ca9d0a99449adcdf0285e"},
 ]
 pyscylla = [
     {file = "pyscylla-0.11.0-cp310-cp310-win32.whl", hash = "sha256:bf925199719dde0c725b91a1af7c7c74d9f8585bbca74c6532fa88748df7cae9"},
@@ -527,9 +537,13 @@ tomli = [
     {file = "tomli-2.0.1-py3-none-any.whl", hash = "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc"},
     {file = "tomli-2.0.1.tar.gz", hash = "sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f"},
 ]
+tomlkit = [
+    {file = "tomlkit-0.11.1-py3-none-any.whl", hash = "sha256:1c5bebdf19d5051e2e1de6cf70adfc5948d47221f097fcff7a3ffc91e953eaf5"},
+    {file = "tomlkit-0.11.1.tar.gz", hash = "sha256:61901f81ff4017951119cd0d1ed9b7af31c821d6845c8c477587bbdcd5e5854e"},
+]
 typing-extensions = [
-    {file = "typing_extensions-4.2.0-py3-none-any.whl", hash = "sha256:6657594ee297170d19f67d55c05852a874e7eb634f4f753dbd667855e07c1708"},
-    {file = "typing_extensions-4.2.0.tar.gz", hash = "sha256:f1c24655a0da0d1b67f07e17a5e6b2a105894e6824b92096378bb3668ef02376"},
+    {file = "typing_extensions-4.3.0-py3-none-any.whl", hash = "sha256:25642c956049920a5aa49edcdd6ab1e06d7e5d467fc00e0506c44ac86fbfca02"},
+    {file = "typing_extensions-4.3.0.tar.gz", hash = "sha256:e6d2677a32f47fc7eb2795db1dd15c1f34eff616bcaf2cfb5e997f854fa1c4a6"},
 ]
 unicorn = [
     {file = "unicorn-1.0.3-py2.py3-none-macosx_10_14_x86_64.whl", hash = "sha256:23f842ce919fcba1a1a1d54471951cf41a4fbf34fd64a09545ed0f1250f9919c"},
