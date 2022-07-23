@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+- Fix a potential deadlock when dumping DLLs
 
 ## [0.3.0] - 2022-07-22
 ### Fixed

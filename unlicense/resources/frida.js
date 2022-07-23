@@ -5,6 +5,7 @@ const reset = "\x1b[0m"
 
 let allocatedBuffers = [];
 let originalPageProtections = new Map();
+let oepReached = false;
 
 // DLLs-related
 let skipDllOepInstr32 = null;
@@ -45,10 +46,10 @@ function rangeContainsAddress(range, address) {
 }
 
 function notifyOepFound(dumpedModule, oepCandidate) {
+    oepReached = true;
+    restoreIntendedPagesProtections();
+
     let isDotNetInitialized = isDotNetProcess();
-
-    restoreIntendedPagesProtections()
-
     send({ 'event': 'oep_reached', 'OEP': oepCandidate, 'BASE': dumpedModule.base, 'DOTNET': isDotNetInitialized })
     let sync_op = recv('block_on_oep', function (_value) { });
     sync_op.wait();
@@ -153,7 +154,7 @@ function isTlsCallback(exceptionCtx, dumpedModule) {
         if (!moduleBase.equals(dumpedModule.base)) {
             return false;
         }
-        // If we're in a TLS callback, the first argument is the
+        // If we're in a TLS callback, the second argument is the
         // reason (from 0 to 3).
         let reason = exceptionCtx.rdx;
         if (reason.compare(ptr(4)) > 0) {
@@ -200,34 +201,6 @@ function skipDllEntryPoint(exceptionCtx) {
     }
 }
 
-function walk_back_stack_for_oep(context, module) {
-    const backtrace = Thread.backtrace(context, Backtracer.FUZZY);
-    if (backtrace.length == 0) {
-        return null;
-    }
-
-    const originalTextSection = Process.findRangeByAddress(backtrace[0]);
-    if (originalTextSection == null) {
-        return null;
-    }
-
-    const moduleStart = module.base;
-    const moduleEnd = module.base.add(module.size);
-    if (moduleStart.compare(originalTextSection.base) > 0 || moduleEnd.compare(originalTextSection.base) <= 0) {
-        return null;
-    }
-
-    let oepCandidate = null;
-    const textSectionStart = originalTextSection.base;
-    const textSectionEnd = originalTextSection.base.add(originalTextSection.size);
-    backtrace.forEach(addr => {
-        if (textSectionStart.compare(addr) <= 0 && textSectionEnd.compare(addr) > 0) {
-            oepCandidate = addr;
-        }
-    });
-    return oepCandidate;
-}
-
 // Define available RPCs
 rpc.exports = {
     setupOepTracing: function (moduleName, expectedOepRanges) {
@@ -249,7 +222,9 @@ rpc.exports = {
         Interceptor.attach(loadDll, {
             onLeave: function (_args) {
                 // If `dllOepCandidate` is set, proceed with the dumping
-                if (dllOepCandidate != null) {
+                // but only once (for our target). Then let other executions go
+                // through as it's not DLLs we're intersted in.
+                if (dllOepCandidate != null && !oepReached) {
                     notifyOepFound(dumpedModule, dllOepCandidate);
                 }
             }
