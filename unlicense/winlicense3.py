@@ -56,7 +56,7 @@ def _find_iat(process_controller: ProcessController) -> Optional[MemoryRange]:
                       hex(page_size))
             iat_start_offset = _find_iat_start(data, exports_dict,
                                                process_controller)
-            if iat_start_offset >= 0:
+            if iat_start_offset is not None:
                 return MemoryRange(
                     page_addr + iat_start_offset,
                     m_range.size - page_index * page_size - iat_start_offset,
@@ -65,12 +65,12 @@ def _find_iat(process_controller: ProcessController) -> Optional[MemoryRange]:
 
 
 def _find_iat_start(data: bytes, exports: Dict[int, Dict[str, Any]],
-                    process_controller: ProcessController) -> int:
+                    process_controller: ProcessController) -> Optional[int]:
     """
     Check whether `data` looks like an "obfuscated" IAT. Themida 3.x wraps
-    most of the imports but not all of them (the threshold of 3% of valid
-    imports and 50% of pointers to RWX memory has been chosen empirically).
-    Returns -1 if this doesn't look like there's an obfuscated IAT in `data`.
+    most of the imports but not all of them (the threshold of 2% of valid
+    imports and 80% of pointers to R*X memory has been chosen empirically).
+    Returns `None` if this doesn't look like there's an obfuscated IAT in `data`.
     """
     ptr_format = pointer_size_to_fmt(process_controller.pointer_size)
     elem_count = min(100, len(data) // process_controller.pointer_size)
@@ -116,11 +116,11 @@ def _find_iat_start(data: bytes, exports: Dict[int, Dict[str, Any]],
     LOG.debug("Non-null pointer count: %d", non_null_count)
     LOG.debug("Valid APIs count: %d", valid_ptr_count)
     LOG.debug("R*X destination count: %d", rx_dest_count)
-    required_valid_elements = int(1 + (non_null_count * 0.03))
-    required_rx_elements = int(1 + (non_null_count * 0.50))
+    required_valid_elements = int(1 + (non_null_count * 0.02))
+    required_rx_elements = int(1 + (non_null_count * 0.80))
     if valid_ptr_count >= required_valid_elements and rx_dest_count >= required_rx_elements:
         return start_offset
-    return -1
+    return None
 
 
 def _unwrap_iat(
