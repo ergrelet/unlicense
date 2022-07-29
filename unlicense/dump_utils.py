@@ -56,8 +56,8 @@ def dump_pe(
         try:
             pyscylla.dump_pe(process_controller.pid, image_base, oep,
                              TMP_FILE_PATH, pe_file_path)
-        except pyscylla.ScyllaException as e:
-            LOG.error("Failed to dump PE: %s", str(e))
+        except pyscylla.ScyllaException as scylla_exception:
+            LOG.error("Failed to dump PE: %s", str(scylla_exception))
             return False
 
         LOG.info("Fixing dump ...")
@@ -66,14 +66,14 @@ def dump_pe(
             pyscylla.fix_iat(process_controller.pid, image_base, iat_addr,
                              iat_size, add_new_iat, TMP_FILE_PATH,
                              output_file_name)
-        except pyscylla.ScyllaException as e:
-            LOG.error("Failed to fix IAT: %s", str(e))
+        except pyscylla.ScyllaException as scylla_exception:
+            LOG.error("Failed to fix IAT: %s", str(scylla_exception))
             return False
 
         try:
             pyscylla.rebuild_pe(output_file_name, False, True, False)
-        except pyscylla.ScyllaException as e:
-            LOG.error("Failed to rebuild PE: %s", str(e))
+        except pyscylla.ScyllaException as scylla_exception:
+            LOG.error("Failed to rebuild PE: %s", str(scylla_exception))
             return False
 
         _rebuild_pe(output_file_name)
@@ -90,8 +90,8 @@ def dump_dotnet_assembly(
     try:
         pyscylla.dump_pe(process_controller.pid, image_base, image_base,
                          output_file_name, None)
-    except pyscylla.ScyllaException as e:
-        LOG.error("Failed to dump PE: %s", str(e))
+    except pyscylla.ScyllaException as scylla_exception:
+        LOG.error("Failed to dump PE: %s", str(scylla_exception))
         return False
 
     LOG.info("Output file has been saved at '%s'", output_file_name)
@@ -120,8 +120,8 @@ def _rebuild_pe(pe_file_path: str) -> None:
     pe_size = highest_section.offset + highest_section.size
 
     # Truncate file
-    with open(pe_file_path, "ab") as f:
-        f.truncate(pe_size)
+    with open(pe_file_path, "ab") as pe_file:
+        pe_file.truncate(pe_size)
 
 
 def _resolve_section_names(binary: lief.Binary) -> None:
@@ -131,9 +131,9 @@ def _resolve_section_names(binary: lief.Binary) -> None:
                       hex(data_dir.section.virtual_address))
             data_dir.section.name = ".rsrc"
 
-    ep = binary.optional_header.addressof_entrypoint
+    ep_address = binary.optional_header.addressof_entrypoint
     for section in binary.sections:
-        if ep >= section.virtual_address and ep < section.virtual_address + section.virtual_size:
+        if section.virtual_address + section.virtual_size > ep_address >= section.virtual_address:
             LOG.debug(".text section found (RVA=%s)",
                       hex(section.virtual_address))
             section.name = ".text"

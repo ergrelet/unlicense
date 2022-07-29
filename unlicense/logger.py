@@ -13,12 +13,12 @@ def setup_logger(logger: logging.Logger, verbose: bool) -> None:
     logger.setLevel(log_level)
 
     # Create a console handler with a higher log level
-    ch = logging.StreamHandler()
-    ch.setLevel(log_level)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(log_level)
 
-    ch.setFormatter(CustomFormatter())
+    stream_handler.setFormatter(CustomFormatter())
 
-    logger.addHandler(ch)
+    logger.addHandler(stream_handler)
 
 
 class CustomFormatter(logging.Formatter):

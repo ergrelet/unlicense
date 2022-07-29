@@ -44,10 +44,11 @@ def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
     assert text_section_range.data is not None
 
     # Ensure the .text section address seems coherent with the memory layout
-    for range in process_controller.main_module_ranges:
-        if range.data is not None and text_section_range.contains(range.base):
-            LOG.debug("0x%x - 0x%x", range.base, range.size)
-            text_section_range.data += range.data
+    for mem_range in process_controller.main_module_ranges:
+        if mem_range.data is not None and text_section_range.contains(
+                mem_range.base):
+            LOG.debug("0x%x - 0x%x", mem_range.base, mem_range.size)
+            text_section_range.data += mem_range.data
 
     if len(text_section_range.data) > text_section_range.size:
         text_section_range.data = text_section_range.data[:text_section_range.
@@ -214,7 +215,7 @@ def _find_wrapped_imports(
                 i += call_size + 1
                 continue
             # Wrapped, add it to set of wrappers to resolve
-            elif _is_in_executable_range(call_dest, process_controller):
+            if _is_in_executable_range(call_dest, process_controller):
                 wrapper_set.add(
                     (instr_addr, call_size, instr_was_jmp, call_dest))
                 i += call_size + 1
@@ -287,15 +288,16 @@ def _generate_export_hashes(
         if module_name != process_controller.main_module_name:
             ranges += process_controller.enumerate_module_ranges(
                 module_name, include_data=True)
-    ranges = list(filter(lambda r: r.protection[2] == 'x', ranges))
+    ranges = list(
+        filter(lambda mem_range: mem_range.protection[2] == 'x', ranges))
 
     def get_data(addr: int, size: int) -> bytes:
-        for r in ranges:
-            if r.data is None:
+        for mem_range in ranges:
+            if mem_range.data is None:
                 continue
-            if r.contains(addr):
-                offset = addr - r.base
-                return r.data[offset:offset + size]
+            if mem_range.contains(addr):
+                offset = addr - mem_range.base
+                return mem_range.data[offset:offset + size]
         return bytes()
 
     exports_count = len(exports_dict)
@@ -442,9 +444,9 @@ def _is_in_executable_range(address: int,
     """
     Check if an address is located in an executable memory range.
     """
-    r = process_controller.find_range_by_address(address)
-    if r is None:
+    mem_range = process_controller.find_range_by_address(address)
+    if mem_range is None:
         return False
 
-    protection: str = r.protection[2]
+    protection: str = mem_range.protection[2]
     return protection == 'x'

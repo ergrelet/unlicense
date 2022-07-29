@@ -1,4 +1,3 @@
-from cgitb import text
 import functools
 import logging
 from importlib import resources
@@ -69,8 +68,9 @@ class FridaProcessController(ProcessController):
             self,
             module_name: str,
             include_data: bool = False) -> List[MemoryRange]:
-        convert_range = lambda r: self._frida_range_to_mem_range(
-            r, include_data)
+
+        def convert_range(dict_range: Dict[str, Any]) -> MemoryRange:
+            return self._frida_range_to_mem_range(dict_range, include_data)
 
         value: List[Dict[str, Any]] = self._frida_rpc.enumerate_module_ranges(
             module_name)
@@ -96,8 +96,8 @@ class FridaProcessController(ProcessController):
         try:
             protection: str = self._frida_rpc.query_memory_protection(address)
             return protection
-        except frida.core.RPCException as e:
-            raise QueryProcessMemoryError from e
+        except frida.core.RPCException as rpc_exception:
+            raise QueryProcessMemoryError from rpc_exception
 
     def set_memory_protection(self, address: int, size: int,
                               protection: str) -> bool:
@@ -116,29 +116,29 @@ class FridaProcessController(ProcessController):
                     raise ReadProcessMemoryError("invalid parameters")
                 read_data[offset:offset + chunk_size] = data
             return bytes(read_data)
-        except frida.core.RPCException as e:
-            raise ReadProcessMemoryError from e
+        except frida.core.RPCException as rpc_exception:
+            raise ReadProcessMemoryError from rpc_exception
 
     def write_process_memory(self, address: int, data: List[int]) -> None:
         try:
             self._frida_rpc.write_process_memory(address, data)
-        except frida.core.RPCException as e:
-            raise WriteProcessMemoryError from e
+        except frida.core.RPCException as rpc_exception:
+            raise WriteProcessMemoryError from rpc_exception
 
     def terminate_process(self) -> None:
         frida.kill(self.pid)
         self._frida_session.detach()
 
-    def _frida_range_to_mem_range(self, r: Dict[str, Any],
+    def _frida_range_to_mem_range(self, dict_range: Dict[str, Any],
                                   with_data: bool) -> MemoryRange:
-        base = int(r["base"], 16)
-        size = r["size"]
+        base = int(dict_range["base"], 16)
+        size = dict_range["size"]
         data = None
         if with_data:
             data = self.read_process_memory(base, size)
         return MemoryRange(base=base,
                            size=size,
-                           protection=r["protection"],
+                           protection=dict_range["protection"],
                            data=data)
 
 

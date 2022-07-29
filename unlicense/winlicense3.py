@@ -110,7 +110,7 @@ def _find_iat_start(data: bytes, exports: Dict[int, Dict[str, Any]],
             prot = process_controller.query_memory_protection(ptr)
             if prot[0] == 'r' and prot[2] == 'x':
                 rx_dest_count += 1
-        except:
+        except QueryProcessMemoryError:
             pass
 
     LOG.debug("Non-null pointer count: %d", non_null_count)
@@ -171,7 +171,7 @@ def _unwrap_iat(
                     new_iat_data += struct.pack(ptr_format, resolved_api)
                     resolved_import_count += 1
                     if successive_failures > 0:
-                        LOG.warn(
+                        LOG.warning(
                             "A resolved API wasn't an export, "
                             "it's been replaced with 'kernel32.ExitProcess'.")
                         successive_failures = 0
@@ -192,8 +192,9 @@ def _unwrap_iat(
                 new_iat_data += struct.pack(ptr_format, wrapper_start)
                 resolved_import_count += 1
                 if successive_failures > 0:
-                    LOG.warn("A resolved API wasn't an export, "
-                             "it's been replaced with 'kernel32.ExitProcess'.")
+                    LOG.warning(
+                        "A resolved API wasn't an export, "
+                        "it's been replaced with 'kernel32.ExitProcess'.")
                     successive_failures = 0
             else:
                 # Junk pointer (most likely null). Keep as null for alignment
