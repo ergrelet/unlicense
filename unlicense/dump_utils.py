@@ -19,9 +19,10 @@ def probe_text_sections(pe_file_path: str) -> Optional[List[MemoryRange]]:
     text_sections = []
     binary = lief.parse(pe_file_path)
 
-    # Find the potential text sections (i.e., executable sections with "empty" names)
+    # Find the potential text sections (i.e., executable sections with "empty"
+    # names or named '.text')
     for section in binary.sections:
-        if len(section.name.replace(' ', '')) > 0:
+        if len(section.name.replace(' ', '')) > 0 and section.name != ".text":
             break
 
         if lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE in section.characteristics_lists:

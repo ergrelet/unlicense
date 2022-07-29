@@ -11,7 +11,7 @@ def detect_winlicense_version(pe_file_path: str) -> Optional[int]:
 
     # Version 3.x
     try:
-        _boot_section = binary.get_section(".boot")
+        # Note: The '.boot' section might not always be present
         _themida_section = binary.get_section(".themida")
         return 3
     except lief.not_found:
@@ -19,7 +19,7 @@ def detect_winlicense_version(pe_file_path: str) -> Optional[int]:
         pass
 
     try:
-        _boot_section = binary.get_section(".boot")
+        # Note: The '.boot' section might not always be present
         _winlice_section = binary.get_section(".winlice")
         return 3
     except lief.not_found:

@@ -3,6 +3,8 @@
 ## [Unreleased]
 ### Fixed
 - Fix a potential deadlock when dumping DLLs
+- Improve version detection for Themida/Winlicense 3.x
+- Improve .text section detection for Themida/Winlicense 3.x
 
 ## [0.3.0] - 2022-07-22
 ### Fixed
