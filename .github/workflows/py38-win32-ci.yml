@@ -1,4 +1,4 @@
-name: CI Windows x64
+name: Python 3.8 (x86)
 
 on: [push]
 
@@ -20,7 +20,7 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: 3.8
-          architecture: x64
+          architecture: x86
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
@@ -36,13 +36,3 @@ jobs:
 
       - name: Run mypy
         run: poetry run mypy --strict unlicense
-
-      - name: Build PyInstaller package
-        run: poetry run pyinstaller unlicense.spec
-
-      - name: 'Upload PyInstaller Artifact'
-        uses: actions/upload-artifact@v3
-        with:
-          name: pyinstaller-win64
-          path: dist/*.exe
-          retention-days: 3

@@ -1,4 +1,4 @@
-# Unlicense [![](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) ![CI status x64](https://github.com/ergrelet/unlicense/actions/workflows/win64-ci.yml/badge.svg?branch=main) ![CI status x86](https://github.com/ergrelet/unlicense/actions/workflows/win32-ci.yml/badge.svg?branch=main)
+# Unlicense [![](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) ![CI status x64](https://github.com/ergrelet/unlicense/actions/workflows/py310-win64-ci.yml/badge.svg?branch=main) ![CI status x86](https://github.com/ergrelet/unlicense/actions/workflows/py310-win32-ci.yml/badge.svg?branch=main)
 
 A Python 3 tool to dynamically unpack executables protected with
 Themida/WinLicense 2.x and 3.x.
