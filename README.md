@@ -29,8 +29,7 @@ Note: You need to use a 32-bit Python interpreter to dump 32-bit executables.
 You can either download the PyInstaller-generated executables from the "Releases"
 section or fetch the project with `git` and install it with `pip`:
 ```
-$ git clone https://github.com/ergrelet/unlicense.git
-$ pip install unlicense/
+$ pip install git+https://github.com/ergrelet/unlicense.git
 ```
 
 ### Use
