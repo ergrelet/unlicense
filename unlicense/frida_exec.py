@@ -113,7 +113,8 @@ class FridaProcessController(ProcessController):
                 data = self._frida_rpc.read_process_memory(
                     address + offset, chunk_size)
                 if data is None:
-                    raise ReadProcessMemoryError("invalid parameters")
+                    raise ReadProcessMemoryError(
+                        "read_process_memory failed (invalid parameters?)")
                 read_data[offset:offset + chunk_size] = data
             return bytes(read_data)
         except frida.core.RPCException as rpc_exception:

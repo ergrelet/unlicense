@@ -11,7 +11,7 @@ from unicorn.x86_const import (  # type: ignore
     UC_X86_REG_RAX)
 
 from .dump_utils import pointer_size_to_fmt
-from .process_control import ProcessController, Architecture
+from .process_control import ProcessController, Architecture, ReadProcessMemoryError
 
 STACK_MAGIC_RET_ADDR = 0xdeadbeef
 LOG = logging.getLogger(__name__)
@@ -140,6 +140,11 @@ def _unicorn_hook_unmapped(uc: Uc, _access: Any, address: int, _size: int,
         return True
     except UcError as e:
         LOG.error("ERROR: %s", str(e))
+        return False
+    except ReadProcessMemoryError as e:
+        # Log this error as debug as it's expected to happen in cases where we
+        # reach the end of the IAT.
+        LOG.debug("ERROR: %s", str(e))
         return False
     except Exception as e:
         LOG.error("ERROR: %s", str(e))
