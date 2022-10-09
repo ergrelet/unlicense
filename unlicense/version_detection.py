@@ -10,21 +10,11 @@ def detect_winlicense_version(pe_file_path: str) -> Optional[int]:
     binary = lief.parse(pe_file_path)
 
     # Version 3.x
-    try:
-        # Note: The '.boot' section might not always be present
-        _themida_section = binary.get_section(".themida")
+    # Note: The '.boot' section might not always be present, so we do not check
+    # for it.
+    if binary.get_section(".themida") is not None or \
+       binary.get_section(".winlice") is not None:
         return 3
-    except lief.not_found:
-        # Not Themida 3.x
-        pass
-
-    try:
-        # Note: The '.boot' section might not always be present
-        _winlice_section = binary.get_section(".winlice")
-        return 3
-    except lief.not_found:
-        # Not Winlicense 3.x
-        pass
 
     # Version 2.x
     if len(binary.imports) == 2 and len(binary.imported_functions) == 2:

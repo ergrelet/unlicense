@@ -6,10 +6,10 @@ authors = ["Erwan Grelet"]
 license = "GPL-3.0-or-later"
 
 [tool.poetry.dependencies]
-python = "^3.8, <3.11"
+python = ">=3.9, <3.11"
 frida = "^15.1"
 unicorn = "^1.0"
-lief = "^0.11"
+lief = ">=0.12.2"
 fire = "^0.4"
 capstone = "^4.0"
 xxhash = "^2.0"

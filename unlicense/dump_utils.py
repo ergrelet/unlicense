@@ -126,7 +126,8 @@ def _rebuild_pe(pe_file_path: str) -> None:
 
 def _resolve_section_names(binary: lief.Binary) -> None:
     for data_dir in binary.data_directories:
-        if data_dir.type == lief.PE.DATA_DIRECTORY.RESOURCE_TABLE:
+        if data_dir.type == lief.PE.DATA_DIRECTORY.RESOURCE_TABLE and \
+           data_dir.section is not None:
             LOG.debug(".rsrc section found (RVA=%s)",
                       hex(data_dir.section.virtual_address))
             data_dir.section.name = ".rsrc"
