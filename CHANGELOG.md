@@ -5,6 +5,11 @@
 - Fix a potential deadlock when dumping DLLs
 - Improve version detection for Themida/Winlicense 3.x
 - Improve .text section detection for Themida/Winlicense 3.x
+- Fix `lief.not_found` exception happening when dumping certain MinGW EXEs
+- Fix TLS callback detection for some 32-bit EXEs
+
+### Changed
+- Silence some misleading "error" logs that were emitted
 
 ## [0.3.0] - 2022-07-22
 ### Fixed
