@@ -89,6 +89,17 @@ function registerExceptionHandler(dumpedModule, expectedOepRanges, moduleIsDll) 
             // access violation on inaccessible pages. This can happen on some
             // 32-bit executables.
             if (exp.memory.operation == "read" && exp.memory.address.equals(exp.context.pc)) {
+                // If we're in a TLS callback, the first argument is the
+                // module's base address
+                if (!moduleIsDll && isTlsCallback(exp.context, dumpedModule)) {
+                    log(`TLS callback #${tlsCallbackCount} detected (at ${exp.context.pc}), skipping ...`);
+                    tlsCallbackCount++;
+
+                    // Modify PC to skip the callback's execution and return
+                    skipTlsCallback(exp.context);
+                    return true;
+                }
+
                 log(`OEP found (thread #${threadId}): ${oepCandidate}`);
                 // Report the potential OEP
                 notifyOepFound(dumpedModule, oepCandidate);
