@@ -3,8 +3,7 @@ import struct
 from collections import defaultdict
 from typing import (Dict, List, Tuple, Any, Optional, Set)
 
-import lief  # type: ignore
-import lief.PE  # type: ignore
+import lief
 from capstone import (  # type: ignore
     Cs, CS_ARCH_X86, CS_MODE_32, CS_MODE_64)
 from capstone.x86 import X86_OP_MEM, X86_OP_IMM  # type: ignore

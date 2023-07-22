@@ -1,6 +1,6 @@
 import logging
 
-import lief  # type: ignore
+import lief
 
 
 def setup_logger(logger: logging.Logger, verbose: bool) -> None:

@@ -1,7 +1,7 @@
 from typing import Optional
 import logging
 
-import lief  # type: ignore
+import lief
 
 THEMIDA2_IMPORTED_MODS = ["kernel32.dll", "comctl32.dll"]
 THEMIDA2_IMPORTED_FUNCS = ["lstrcpy", "InitCommonControls"]

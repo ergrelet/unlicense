@@ -6,8 +6,7 @@ import struct
 from tempfile import TemporaryDirectory
 from typing import List, Optional
 
-import lief  # type: ignore
-import lief.PE  # type: ignore
+import lief
 import pyscylla  # type: ignore
 
 from .process_control import MemoryRange, ProcessController
