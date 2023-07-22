@@ -85,16 +85,24 @@ termcolor = "*"
 
 [[package]]
 name = "frida"
-version = "15.2.2"
+version = "16.1.3"
 description = "Dynamic instrumentation toolkit for developers, reverse-engineers, and security researchers"
 optional = false
-python-versions = "*"
+python-versions = ">=3.7"
 files = [
-    {file = "frida-15.2.2.tar.gz", hash = "sha256:76e2cd9d4ce0559d0132201ff087fd31205e8e26ef590eeba89cbdad582ecb59"},
+    {file = "frida-16.1.3-cp37-abi3-macosx_10_9_x86_64.whl", hash = "sha256:ea1412e8f22d035fd709abfe8cbd98f6ca3b57c15505e88d290752288ea59814"},
+    {file = "frida-16.1.3-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:4a25d1593b5bda6688c63159636a1c124ebc2cc5ae28bfe2ebe7f12bb2f7ee71"},
+    {file = "frida-16.1.3-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:1d0b9f14f79c0d8e3235edf232670177a5256ad197c8b9f563ac50dfb4bdb8aa"},
+    {file = "frida-16.1.3-cp37-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:aeea0c0d43ce8d5f64afeec6f364463cebb16cfbcd6a4a8c6465997e74d0aacd"},
+    {file = "frida-16.1.3-cp37-abi3-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:7de8ecf12db41e201a5ed99c9946a600c5607dd56ca95fb37c4ec029f476c9a2"},
+    {file = "frida-16.1.3-cp37-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:52e40b5af28f10119903c94bc9953153b4367e5dca965c7cacfcdd128e5d3e7c"},
+    {file = "frida-16.1.3-cp37-abi3-win32.whl", hash = "sha256:ddf9aa85b471f850edf2e2c6b9f53c50942dee2025c934687b72bde0a7983422"},
+    {file = "frida-16.1.3-cp37-abi3-win_amd64.whl", hash = "sha256:2ec0a3b3c6011872ab243f84c29ba4b7d28da5fc0a9d563b6ee4958392b6a853"},
+    {file = "frida-16.1.3.tar.gz", hash = "sha256:859a099f3e671259b86172268ccb74d84fc9b0758956fbe8a1f22d77cfd598a8"},
 ]
 
 [package.dependencies]
-setuptools = "*"
+typing-extensions = {version = "*", markers = "python_version < \"3.11\""}
 
 [[package]]
 name = "isort"
@@ -664,4 +672,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9, <3.12"
-content-hash = "0d451ba6fafcf927e05b96b1e01dac8efec13b6cf292a0ee69b8d01280ff09c5"
+content-hash = "8e67216ad88ed384a913dcb7d6a8546ed3399d0365df9e9d43ce0115c95d699d"

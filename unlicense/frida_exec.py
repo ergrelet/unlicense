@@ -4,8 +4,8 @@ from importlib import resources
 from pathlib import Path
 from typing import (List, Callable, Dict, Any, Optional)
 
-import frida  # type: ignore
-import frida.core  # type: ignore
+import frida
+import frida.core
 
 from .process_control import (ProcessController, Architecture, MemoryRange,
                               QueryProcessMemoryError, ReadProcessMemoryError,
@@ -158,9 +158,11 @@ def spawn_and_instrument(
     if pe_path.suffix == ".dll":
         # Use `rundll32` to load the DLL
         rundll32_path = "C:\\Windows\\System32\\rundll32.exe"
-        pid = frida.spawn((rundll32_path, str(pe_path.absolute()), "#0"))
+        pid = frida.spawn(
+            rundll32_path,
+            [rundll32_path, str(pe_path.absolute()), "#0"])
     else:
-        pid = frida.spawn((str(pe_path), ))
+        pid = frida.spawn(str(pe_path))
 
     main_module_name = pe_path.name
     session = frida.attach(pid)
