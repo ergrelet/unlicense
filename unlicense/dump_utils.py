@@ -17,7 +17,10 @@ LOG = logging.getLogger(__name__)
 
 def probe_text_sections(pe_file_path: str) -> Optional[List[MemoryRange]]:
     text_sections = []
-    binary = lief.parse(pe_file_path)
+    binary = lief.PE.parse(pe_file_path)
+    if binary is None:
+        LOG.error("Failed to parse PE '%s'", pe_file_path)
+        return None
 
     # Find the potential text sections (i.e., executable sections with "empty"
     # names or named '.text')
@@ -100,11 +103,15 @@ def dump_dotnet_assembly(
 
 
 def _rebuild_pe(pe_file_path: str) -> None:
-    binary = lief.parse(pe_file_path)
+    binary = lief.PE.parse(pe_file_path)
+    if binary is None:
+        LOG.error("Failed to parse PE '%s'", pe_file_path)
+        return
+
     # Rename sections
     _resolve_section_names(binary)
     # Disable ASLR
-    binary.optional_header.dll_characteristics &= ~lief.PE.DLL_CHARACTERISTICS.DYNAMIC_BASE
+    binary.optional_header.dll_characteristics &= ~lief.PE.DLL_CHARACTERISTICS.DYNAMIC_BASE.value
     # Rebuild PE
     builder = lief.PE.Builder(binary)
     builder.build_dos_stub(True)
@@ -124,7 +131,7 @@ def _rebuild_pe(pe_file_path: str) -> None:
         pe_file.truncate(pe_size)
 
 
-def _resolve_section_names(binary: lief.Binary) -> None:
+def _resolve_section_names(binary: lief.PE.Binary) -> None:
     for data_dir in binary.data_directories:
         if data_dir.type == lief.PE.DATA_DIRECTORY.RESOURCE_TABLE and \
            data_dir.section is not None:

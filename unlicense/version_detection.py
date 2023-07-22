@@ -1,13 +1,18 @@
 from typing import Optional
+import logging
 
 import lief  # type: ignore
 
 THEMIDA2_IMPORTED_MODS = ["kernel32.dll", "comctl32.dll"]
 THEMIDA2_IMPORTED_FUNCS = ["lstrcpy", "InitCommonControls"]
+LOG = logging.getLogger(__name__)
 
 
 def detect_winlicense_version(pe_file_path: str) -> Optional[int]:
-    binary = lief.parse(pe_file_path)
+    binary = lief.PE.parse(pe_file_path)
+    if binary is None:
+        LOG.error("Failed to parse PE '%s'", pe_file_path)
+        return None
 
     # Version 3.x
     # Note: The '.boot' section might not always be present, so we do not check
@@ -16,7 +21,7 @@ def detect_winlicense_version(pe_file_path: str) -> Optional[int]:
         if binary.get_section(".themida") is not None or \
            binary.get_section(".winlice") is not None:
             return 3
-    except lief.not_found:
+    except lief.not_found:  # type: ignore
         # Not Themida 3.x
         pass
 
