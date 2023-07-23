@@ -6,9 +6,9 @@ from typing import (Dict, List, Tuple, Any, Optional, Set)
 import lief
 from capstone import (  # type: ignore
     Cs, CS_ARCH_X86, CS_MODE_32, CS_MODE_64)
-from capstone.x86 import X86_OP_MEM, X86_OP_IMM
+from capstone.x86 import X86_OP_MEM, X86_OP_IMM  # type: ignore
 
-from unlicense.lief_utils import lief_pe_sections  # type: ignore
+from unlicense.lief_utils import lief_pe_sections
 
 from .dump_utils import dump_pe, pointer_size_to_fmt
 from .emulation import resolve_wrapped_api
@@ -205,6 +205,9 @@ def _find_wrapped_imports(
                         instruction.address + instruction.size +
                         op.value.mem.disp, ptr_size)
                     call_dest = struct.unpack(ptr_format, data)[0]
+                else:
+                    raise NotImplementedError(
+                        f"Unsupported architecture: {arch}")
             except ProcessControllerException:
                 i += 1
                 continue
@@ -435,6 +438,8 @@ def _fix_import_references_in_process(
                 # RIP-relative
                 operand = iat_addr + i * ptr_size - (call_addr + 6)
                 fmt = "<i"
+            else:
+                raise NotImplementedError(f"Unsupported architecture: {arch}")
 
             if instr_was_jmp:
                 # jmp [iat_addr + i * ptr_size]

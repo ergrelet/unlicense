@@ -7,9 +7,9 @@ from tempfile import TemporaryDirectory
 from typing import List, Optional
 
 import lief
-import pyscylla
+import pyscylla  # type: ignore
 
-from unlicense.lief_utils import lief_pe_data_directories, lief_pe_sections  # type: ignore
+from unlicense.lief_utils import lief_pe_data_directories, lief_pe_sections
 
 from .process_control import MemoryRange, ProcessController
 

@@ -42,7 +42,7 @@ def detect_winlicense_version(pe_file_path: str) -> Optional[int]:
     ]
 
     for section in lief_pe_sections(binary):
-        if instr_pattern == section.content[:len(instr_pattern)]:
+        if instr_pattern == list(section.content[:len(instr_pattern)]):
             return 2
 
     # Failed to automatically detect version

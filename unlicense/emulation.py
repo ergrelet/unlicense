@@ -43,9 +43,8 @@ def resolve_wrapped_api(
     else:
         raise NotImplementedError(f"Architecture '{arch}' isn't supported")
 
+    uc = Uc(uc_arch, uc_mode)
     try:
-        uc = Uc(uc_arch, uc_mode)
-
         # Map fake return address's page in case wrappers try to access it
         aligned_addr = STACK_MAGIC_RET_ADDR - (STACK_MAGIC_RET_ADDR %
                                                process_controller.page_size)
@@ -80,13 +79,18 @@ def resolve_wrapped_api(
         uc.emu_start(wrapper_start_addr, wrapper_start_addr + 1024)
 
         # Read and return PC
-        pc: int = uc.reg_read(result_register)
+        pc = uc.reg_read(result_register)
+        assert isinstance(pc, int)
+
         return pc
     except UcError as e:
         LOG.debug("ERROR: %s", str(e))
         pc = uc.reg_read(pc_register)
+        assert isinstance(pc, int)
         sp = uc.reg_read(sp_register)
+        assert isinstance(sp, int)
         bp = uc.reg_read(bp_register)
+        assert isinstance(bp, int)
         LOG.debug("PC=%s", hex(pc))
         LOG.debug("SP=%s", hex(sp))
         LOG.debug("BP=%s", hex(bp))
@@ -164,11 +168,14 @@ def _unicorn_hook_block(uc: Uc, address: int, _size: int,
         pc_register = UC_X86_REG_RIP
         sp_register = UC_X86_REG_RSP
         result_register = UC_X86_REG_RAX
+    else:
+        raise NotImplementedError(f"Unsupported architecture: {arch}")
 
     exports_dict = process_controller.enumerate_exported_functions()
     if address in exports_dict:
         # Reached an export or returned to the call site
         sp = uc.reg_read(sp_register)
+        assert isinstance(sp, int)
         ret_addr_data = uc.mem_read(sp, ptr_size)
         ret_addr = struct.unpack(pointer_size_to_fmt(ptr_size),
                                  ret_addr_data)[0]
