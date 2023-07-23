@@ -1,6 +1,6 @@
 import logging
 import struct
-from typing import (Tuple, Any, Optional)
+from typing import Callable, Dict, Tuple, Any, Optional
 
 from unicorn import (  # type: ignore
     Uc, UcError, UC_ARCH_X86, UC_MODE_32, UC_MODE_64, UC_PROT_READ,
@@ -157,9 +157,11 @@ def _unicorn_hook_block(uc: Uc, address: int, _size: int,
     ptr_size = process_controller.pointer_size
     arch = process_controller.architecture
     if arch == Architecture.X86_32:
+        pc_register = UC_X86_REG_EIP
         sp_register = UC_X86_REG_ESP
         result_register = UC_X86_REG_EAX
     elif arch == Architecture.X86_64:
+        pc_register = UC_X86_REG_RIP
         sp_register = UC_X86_REG_RSP
         result_register = UC_X86_REG_RAX
 
@@ -170,7 +172,8 @@ def _unicorn_hook_block(uc: Uc, address: int, _size: int,
         ret_addr_data = uc.mem_read(sp, ptr_size)
         ret_addr = struct.unpack(pointer_size_to_fmt(ptr_size),
                                  ret_addr_data)[0]
-        LOG.debug("Reached API '%s'", exports_dict[address]['name'])
+        api_name = exports_dict[address]['name']
+        LOG.debug("Reached API '%s'", api_name)
         if ret_addr == stop_on_ret_addr or \
             ret_addr == stop_on_ret_addr + 1 \
                 or ret_addr == STACK_MAGIC_RET_ADDR:
@@ -178,14 +181,48 @@ def _unicorn_hook_block(uc: Uc, address: int, _size: int,
             uc.reg_write(result_register, address)
             uc.emu_stop()
             return
-        if _is_no_return_api(exports_dict[address]["name"]):
+        if _is_no_return_api(api_name):
             # Note: Dirty fix for ExitProcess-like wrappers on WinLicense 3.x
             LOG.debug("Reached noreturn API, stopping emulation")
             uc.reg_write(result_register, address)
             uc.emu_stop()
+            return
+        if _is_bogus_api(api_name):
+            # Note: Starting with Themida 3.1.4.0, wrappers call some useless
+            # APIs to fool emulation-based unwrappers
+            LOG.debug("Reached bogus API call, skipping")
+            # "Simulate" bogus call
+            result, arg_count = _simulate_bogus_api(api_name)
+            # Set result
+            uc.reg_write(result_register, result)
+
+            # Fix the stack
+            if arch == Architecture.X86_32:
+                # Pop return address and arguments from the stack
+                uc.reg_write(sp_register, sp + ptr_size * (1 + arg_count))
+            elif arch == Architecture.X86_64:
+                # Pop return address and arguments from the stack
+                stack_arg_count = max(0, arg_count - 4)
+                uc.reg_write(sp_register,
+                             sp + ptr_size * (1 + stack_arg_count))
+
+            # Set next address
+            uc.reg_write(pc_register, ret_addr)
             return
 
 
 def _is_no_return_api(api_name: str) -> bool:
     NO_RETURN_APIS = ["ExitProcess", "FatalExit", "ExitThread"]
     return api_name in NO_RETURN_APIS
+
+
+def _is_bogus_api(api_name: str) -> bool:
+    BOGUS_APIS = ["Sleep"]
+    return api_name in BOGUS_APIS
+
+
+def _simulate_bogus_api(api_name: str) -> Tuple[int, int]:
+    BOGUS_API_MAP: Dict[str, Tuple[int, int]] = {
+        "Sleep": (0, 1),
+    }
+    return BOGUS_API_MAP[api_name]

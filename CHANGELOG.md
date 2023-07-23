@@ -7,6 +7,7 @@
 - Improve .text section detection for Themida/Winlicense 3.x
 - Fix `lief.not_found` exception happening when dumping certain MinGW EXEs
 - Fix TLS callback detection for some 32-bit EXEs
+- Handle wrapped imports from Themida/Winlicense 3.1.4.0
 
 ### Changed
 - Silence some misleading "error" logs that were emitted
