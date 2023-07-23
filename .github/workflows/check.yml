@@ -1,10 +1,14 @@
-name: Python 3.9 (x86)
+name: Python Check
 
 on: [push]
 
 jobs:
-
-  build:
+  check:
+    name: Check Python ${{ matrix.python_version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ["3.9", "3.10", "3.11"]
     runs-on: windows-latest
 
     defaults:
@@ -16,11 +20,11 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Set up Python 3.9
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.9"
-          architecture: x86
+          python-version: ${{ matrix.python_version }}
+          architecture: x64
 
       - name: Install Poetry
         uses: snok/install-poetry@v1

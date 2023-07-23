@@ -1,10 +1,15 @@
-name: Python 3.10 (x86)
+name: PyInstaller Check
 
 on: [push]
 
 jobs:
-
-  build:
+  check:
+    name: Check PyInstaller for Python ${{ matrix.python_version }} (${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ["3.11"]
+        architecture: [x64, x86]
     runs-on: windows-latest
 
     defaults:
@@ -16,11 +21,11 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Set up Python 3.10
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
-          architecture: x86
+          python-version: ${{ matrix.python_version }}
+          architecture: ${{ matrix.architecture }}
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
@@ -31,18 +36,12 @@ jobs:
       - name: Install Dependencies
         run: poetry install
 
-      - name: Run yapf
-        run: poetry run yapf -r -d unlicense
-
-      - name: Run mypy
-        run: poetry run mypy --strict unlicense
-
       - name: Build PyInstaller package
         run: poetry run pyinstaller unlicense.spec
 
-      - name: 'Upload PyInstaller Artifact'
+      - name: "Upload PyInstaller Artifact"
         uses: actions/upload-artifact@v3
         with:
-          name: unlicense-py310-win32
+          name: unlicense-py${{ matrix.python_version }}-${{ matrix.architecture }}
           path: dist/*.exe
           retention-days: 3
