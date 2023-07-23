@@ -7,7 +7,9 @@ from tempfile import TemporaryDirectory
 from typing import List, Optional
 
 import lief
-import pyscylla  # type: ignore
+import pyscylla
+
+from unlicense.lief_utils import lief_pe_data_directories, lief_pe_sections  # type: ignore
 
 from .process_control import MemoryRange, ProcessController
 
@@ -23,11 +25,15 @@ def probe_text_sections(pe_file_path: str) -> Optional[List[MemoryRange]]:
 
     # Find the potential text sections (i.e., executable sections with "empty"
     # names or named '.text')
-    for section in binary.sections:
-        if len(section.name.replace(' ', '')) > 0 and section.name != ".text":
+    for section in lief_pe_sections(binary):
+        section_name = section.fullname
+        stripped_section_name = section_name.replace(' ',
+                                                     '').replace('\00', '')
+        if len(stripped_section_name) > 0 and section_name != ".text":
             break
 
-        if lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE in section.characteristics_lists:
+        if section.has_characteristic(
+                lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE):
             LOG.debug("Probed .text section at (0x%x, 0x%x)",
                       section.virtual_address, section.virtual_size)
             text_sections += [
@@ -78,7 +84,9 @@ def dump_pe(
             LOG.error("Failed to rebuild PE: %s", str(scylla_exception))
             return False
 
+        LOG.info("Rebuilding PE ...")
         _rebuild_pe(output_file_name)
+
         LOG.info("Output file has been saved at '%s'", output_file_name)
 
     return True
@@ -109,8 +117,11 @@ def _rebuild_pe(pe_file_path: str) -> None:
 
     # Rename sections
     _resolve_section_names(binary)
+
     # Disable ASLR
-    binary.optional_header.dll_characteristics &= ~lief.PE.DLL_CHARACTERISTICS.DYNAMIC_BASE.value
+    binary.header.add_characteristic(
+        lief.PE.HEADER_CHARACTERISTICS.RELOCS_STRIPPED)
+    binary.optional_header.remove(lief.PE.DLL_CHARACTERISTICS.DYNAMIC_BASE)
     # Rebuild PE
     builder = lief.PE.Builder(binary)
     builder.build_dos_stub(True)
@@ -118,9 +129,14 @@ def _rebuild_pe(pe_file_path: str) -> None:
     builder.build()
     builder.write(pe_file_path)
 
+    number_of_sections = len(binary.sections)
+    if number_of_sections == 0:
+        # Shouldn't happen but hey
+        return
+
     # Determine the actual PE raw size
     highest_section = binary.sections[0]
-    for section in binary.sections:
+    for section in lief_pe_sections(binary):
         if section.offset > highest_section.offset:
             highest_section = section
     pe_size = highest_section.offset + highest_section.size
@@ -131,7 +147,7 @@ def _rebuild_pe(pe_file_path: str) -> None:
 
 
 def _resolve_section_names(binary: lief.PE.Binary) -> None:
-    for data_dir in binary.data_directories:
+    for data_dir in lief_pe_data_directories(binary):
         if data_dir.type == lief.PE.DATA_DIRECTORY.RESOURCE_TABLE and \
            data_dir.section is not None:
             LOG.debug(".rsrc section found (RVA=%s)",
@@ -139,7 +155,7 @@ def _resolve_section_names(binary: lief.PE.Binary) -> None:
             data_dir.section.name = ".rsrc"
 
     ep_address = binary.optional_header.addressof_entrypoint
-    for section in binary.sections:
+    for section in lief_pe_sections(binary):
         if section.virtual_address + section.virtual_size > ep_address >= section.virtual_address:
             LOG.debug(".text section found (RVA=%s)",
                       hex(section.virtual_address))

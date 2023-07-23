@@ -6,7 +6,9 @@ from typing import (Dict, List, Tuple, Any, Optional, Set)
 import lief
 from capstone import (  # type: ignore
     Cs, CS_ARCH_X86, CS_MODE_32, CS_MODE_64)
-from capstone.x86 import X86_OP_MEM, X86_OP_IMM  # type: ignore
+from capstone.x86 import X86_OP_MEM, X86_OP_IMM
+
+from unlicense.lief_utils import lief_pe_sections  # type: ignore
 
 from .dump_utils import dump_pe, pointer_size_to_fmt
 from .emulation import resolve_wrapped_api
@@ -114,11 +116,16 @@ def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
 
 def _fetch_text_section_information(
         pe_file_path: str) -> Optional[Tuple[int, int]]:
+    binary = lief.PE.parse(pe_file_path)
+    if binary is None:
+        LOG.error("Failed to parse PE '%s'", pe_file_path)
+        return None
+
     # Consider the first executable section to be the text section
     # TODO: Investigate and check if we need to handle different layouts
-    binary = lief.parse(pe_file_path)
-    for section in binary.sections:
-        if lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE in section.characteristics_lists:
+    for section in lief_pe_sections(binary):
+        if section.has_characteristic(
+                lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE):
             return section.virtual_address, section.virtual_size
 
     return None

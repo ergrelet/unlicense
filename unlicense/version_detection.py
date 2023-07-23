@@ -3,6 +3,8 @@ import logging
 
 import lief
 
+from unlicense.lief_utils import lief_pe_sections
+
 THEMIDA2_IMPORTED_MODS = ["kernel32.dll", "comctl32.dll"]
 THEMIDA2_IMPORTED_FUNCS = ["lstrcpy", "InitCommonControls"]
 LOG = logging.getLogger(__name__)
@@ -38,7 +40,8 @@ def detect_winlicense_version(pe_file_path: str) -> Optional[int]:
     instr_pattern = [
         0x56, 0x50, 0x53, 0xE8, 0x01, 0x00, 0x00, 0x00, 0xCC, 0x58
     ]
-    for section in binary.sections:
+
+    for section in lief_pe_sections(binary):
         if instr_pattern == section.content[:len(instr_pattern)]:
             return 2
 
