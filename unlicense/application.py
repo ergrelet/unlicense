@@ -92,6 +92,12 @@ def run_unlicense(
             dumped_oep = dumped_image_base + force_oep
             LOG.info("Using given OEP RVA value instead (%s)", hex(force_oep))
 
+        # Pick the range that contains the OEP
+        text_section_range = text_section_ranges[0]
+        for range in text_section_ranges:
+            if range.contains(dumped_oep - dumped_image_base):
+                text_section_range = range
+
         # .NET assembly dumping works the same way regardless of the version
         if is_dotnet:
             LOG.info("Dumping .NET assembly ...")
@@ -100,10 +106,12 @@ def run_unlicense(
         # Fix imports and dump the executable
         elif target_version == 2:
             winlicense2.fix_and_dump_pe(process_controller, pe_to_dump,
-                                        dumped_image_base, dumped_oep)
+                                        dumped_image_base, dumped_oep,
+                                        text_section_range)
         elif target_version == 3:
             winlicense3.fix_and_dump_pe(process_controller, pe_to_dump,
-                                        dumped_image_base, dumped_oep)
+                                        dumped_image_base, dumped_oep,
+                                        text_section_range)
     finally:
         # Try to kill the process on exit
         process_controller.terminate_process()

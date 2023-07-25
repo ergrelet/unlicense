@@ -1,64 +1,33 @@
 import logging
 import struct
-from collections import defaultdict
-from typing import (Dict, List, Tuple, Any, Optional, Set)
+from typing import Dict, Tuple, Any, Optional
 
-import lief
 from capstone import (  # type: ignore
     Cs, CS_ARCH_X86, CS_MODE_32, CS_MODE_64)
-from capstone.x86 import X86_OP_MEM, X86_OP_IMM  # type: ignore
 
-from unlicense.lief_utils import lief_pe_sections
-
+from .imports import ImportToCallSiteDict, WrapperSet, find_wrapped_imports
 from .dump_utils import dump_pe, pointer_size_to_fmt
 from .emulation import resolve_wrapped_api
 from .function_hashing import compute_function_hash, EMPTY_FUNCTION_HASH
 from .process_control import (ProcessController, Architecture, MemoryRange,
-                              ProcessControllerException,
                               ReadProcessMemoryError)
 
 LOG = logging.getLogger(__name__)
 
-# Describes a map of API addresses to every call site that should point to it
-ImportCallSiteInfo = Tuple[int, int, bool]
-ImportToCallSiteDict = Dict[int, List[ImportCallSiteInfo]]
-# Describes a set of all found call sites
-ImportWrapperInfo = Tuple[int, int, bool, int]
-WrapperSet = Set[ImportWrapperInfo]
-
 
 def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
-                    image_base: int, oep: int) -> None:
+                    image_base: int, oep: int,
+                    text_section_range: MemoryRange) -> None:
     """
     Main dumping routine for Themida/WinLicense 2.x.
     """
-    text_section_info = _fetch_text_section_information(pe_file_path)
-    if text_section_info is None:
-        LOG.error("Failed to find .text section in PE")
-        return
-
-    section_virtual_offset, section_virtual_size = text_section_info
-    section_virtual_addr = image_base + section_virtual_offset
-
-    text_section_range = MemoryRange(section_virtual_addr,
-                                     section_virtual_size, "r-x", bytearray())
+    # Convert RVA range to VA range
+    section_virtual_addr = image_base + text_section_range.base
+    text_section_range = MemoryRange(
+        section_virtual_addr, text_section_range.size, "r-x",
+        process_controller.read_process_memory(section_virtual_addr,
+                                               text_section_range.size))
     assert text_section_range.data is not None
-
-    # Ensure the .text section address seems coherent with the memory layout
-    for mem_range in process_controller.main_module_ranges:
-        if mem_range.data is not None and text_section_range.contains(
-                mem_range.base):
-            LOG.debug("0x%x - 0x%x", mem_range.base, mem_range.size)
-            text_section_range.data += mem_range.data
-
-    if len(text_section_range.data) > text_section_range.size:
-        text_section_range.data = text_section_range.data[:text_section_range.
-                                                          size]
-    elif len(text_section_range.data) < text_section_range.size:
-        LOG.error(".text section/range mismatch (0x%x != 0x%x)",
-                  len(text_section_range.data), text_section_range.size)
-        return
-
     LOG.debug(".text section: %s", str(text_section_range))
 
     arch = process_controller.architecture
@@ -75,9 +44,9 @@ def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
     md.detail = True
 
     LOG.info("Looking for wrapped imports ...")
-    api_to_calls, wrapper_set = _find_wrapped_imports(text_section_range,
-                                                      exports_dict, md,
-                                                      process_controller)
+    api_to_calls, wrapper_set = find_wrapped_imports(text_section_range,
+                                                     exports_dict, md,
+                                                     process_controller)
 
     LOG.info("Potential import wrappers found: %d", len(wrapper_set))
     export_hashes = None
@@ -112,174 +81,6 @@ def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
     LOG.info("Dumping PE with OEP=%s ...", hex(oep))
     dump_pe(process_controller, pe_file_path, image_base, oep, iat_addr,
             iat_size, True)
-
-
-def _fetch_text_section_information(
-        pe_file_path: str) -> Optional[Tuple[int, int]]:
-    binary = lief.PE.parse(pe_file_path)
-    if binary is None:
-        LOG.error("Failed to parse PE '%s'", pe_file_path)
-        return None
-
-    # Consider the first executable section to be the text section
-    # TODO: Investigate and check if we need to handle different layouts
-    for section in lief_pe_sections(binary):
-        if section.has_characteristic(
-                lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE):
-            return section.virtual_address, section.virtual_size
-
-    return None
-
-
-def _find_wrapped_imports(
-    text_section_range: MemoryRange,
-    exports_dict: Dict[int, Dict[str, Any]],  #
-    md: Cs,
-    process_controller: ProcessController
-) -> Tuple[ImportToCallSiteDict, WrapperSet]:
-    """
-    Go through a code section and try to find wrapped (or not) import calls
-    and jmps by disassembling instructions and using a few basic heuristics.
-    """
-    arch = process_controller.architecture
-    ptr_size = process_controller.pointer_size
-    ptr_format = pointer_size_to_fmt(ptr_size)
-
-    # Not supposed to be None
-    assert text_section_range.data is not None
-    text_section_data = text_section_range.data
-
-    wrapper_set: WrapperSet = set()
-    api_to_calls: ImportToCallSiteDict = defaultdict(list)
-    i = 0
-    while i < text_section_range.size:
-        # Quick pre-filter
-        if not _is_wrapped_thunk_jmp(text_section_data, i) and \
-                not _is_wrapped_call(text_section_data, i) and \
-                not _is_wrapped_tail_call(text_section_data, i) and \
-                not _is_indirect_call(text_section_data, i):
-            i += 1
-            continue
-
-        # Check if the instruction is a jmp or should be replaced with a jmp.
-        # This include checking for tail calls ("jmp X; int 3").
-        if text_section_data[i] == 0xE9 or \
-                text_section_data[i:i + 2] == bytes([0x90, 0xE9]) or \
-                text_section_data[i:i + 2] == bytes([0xFF, 0x25]) or \
-                _is_wrapped_tail_call(text_section_data, i):
-            instr_was_jmp = True
-        else:
-            instr_was_jmp = False
-
-        instr_addr = text_section_range.base + i
-        instrs = md.disasm(text_section_data[i:i + 6], instr_addr)
-
-        # Ensure the instructions are "call/jmp" or "nop; call/jmp"
-        instruction = next(instrs)
-        if instruction.mnemonic in ["call", "jmp"]:
-            call_size = instruction.size
-            op = instruction.operands[0]
-        elif instruction.mnemonic == "nop":
-            instruction = next(instrs)
-            if instruction.mnemonic in ["call", "jmp"]:
-                call_size = instruction.size
-                op = instruction.operands[0]
-            else:
-                i += 1
-                continue
-        else:
-            i += 1
-            continue
-
-        # Parse destination address or ignore in case of error
-        if op.type == X86_OP_IMM:
-            call_dest = op.value.imm
-        elif op.type == X86_OP_MEM:
-            try:
-                if arch == Architecture.X86_32:
-                    data = process_controller.read_process_memory(
-                        op.value.mem.disp, ptr_size)
-                    call_dest = struct.unpack(ptr_format, data)[0]
-                elif arch == Architecture.X86_64:
-                    data = process_controller.read_process_memory(
-                        instruction.address + instruction.size +
-                        op.value.mem.disp, ptr_size)
-                    call_dest = struct.unpack(ptr_format, data)[0]
-                else:
-                    raise NotImplementedError(
-                        f"Unsupported architecture: {arch}")
-            except ProcessControllerException:
-                i += 1
-                continue
-        else:
-            i += 1
-            continue
-
-        # Verify that the destination is outside of the .text section
-        if not text_section_range.contains(call_dest):
-            # Not wrapped, add it to list of "resolved wrappers"
-            if call_dest in exports_dict:
-                api_to_calls[call_dest].append(
-                    (instr_addr, call_size, instr_was_jmp))
-                i += call_size + 1
-                continue
-            # Wrapped, add it to set of wrappers to resolve
-            if _is_in_executable_range(call_dest, process_controller):
-                wrapper_set.add(
-                    (instr_addr, call_size, instr_was_jmp, call_dest))
-                i += call_size + 1
-                continue
-        i += 1
-
-    return api_to_calls, wrapper_set
-
-
-def _is_indirect_call(code_section_data: bytes, offset: int) -> bool:
-    """
-    Check if the instruction at `offset` is an `FF15` call.
-    """
-    return code_section_data[offset:offset + 2] == bytes([0xFF, 0x15])
-
-
-def _is_wrapped_thunk_jmp(code_section_data: bytes, offset: int) -> bool:
-    """
-    Check if the instruction at `offset` is a wrapped jmp from a thunk table.
-    """
-    is_jmp = code_section_data[offset] == 0xE9
-    # Dirty trick to catch last elements of thunk tables
-    if offset > 6:
-        jmp_behind = code_section_data[offset - 5] == 0xE9 or \
-                     code_section_data[offset - 6] == 0xE9
-    else:
-        jmp_behind = False
-
-    return (is_jmp and code_section_data[offset + 6] in [0xE9, 0x90]) or \
-           (is_jmp and code_section_data[offset + 5] in [0xCC, 0x90, 0xE9]) or \
-           (code_section_data[offset:offset + 2] == bytes([0x90, 0xE9])) or \
-           (is_jmp and jmp_behind)
-
-
-def _is_wrapped_call(code_section_data: bytes, offset: int) -> bool:
-    """
-    Check if the instruction at `offset` is a wrapped import call. Themida
-    replaces `FF15` calls with `E8` calls followed or preceded by a `nop`.
-    """
-    return (code_section_data[offset] == 0xE8 and code_section_data[offset + 5] == 0x90) or \
-           (code_section_data[offset:offset + 2] == bytes([0x90, 0xE8]))
-
-
-def _is_wrapped_tail_call(code_section_data: bytes, offset: int) -> bool:
-    """
-    Check if the instruction at `offset` is a tail call (and thus should be
-    transformed into a `jmp`).
-    """
-    is_call = code_section_data[offset] == 0xE8
-    return (is_call and code_section_data[offset + 5] == 0xCC) or \
-            (is_call and code_section_data[offset + 6] == 0xCC) or \
-            (code_section_data[offset:offset + 2] == bytes([0x90, 0xE8])
-            and code_section_data[offset + 6] == 0xCC) or (
-                code_section_data[offset:offset + 2] == bytes([0xFF, 0x25])
-                and code_section_data[offset + 6] == 0xCC)
 
 
 def _generate_export_hashes(
@@ -344,7 +145,7 @@ def _resolve_imports(api_to_calls: ImportToCallSiteDict,
     # Iterate over the set of potential import wrappers and try to resolve them
     resolved_wrappers: Dict[int, int] = {}
     problematic_wrappers = set()
-    for call_addr, call_size, instr_was_jmp, wrapper_addr in wrapper_set:
+    for call_addr, call_size, instr_was_jmp, wrapper_addr, _ in wrapper_set:
         resolved_addr = resolved_wrappers.get(wrapper_addr)
         if resolved_addr is not None:
             LOG.debug("Already resolved wrapper: %s -> %s", hex(wrapper_addr),
@@ -448,16 +249,3 @@ def _fix_import_references_in_process(
                 # call [iat_addr + i * ptr_size]
                 new_instr = bytes([0xFF, 0x15]) + struct.pack(fmt, operand)
             process_controller.write_process_memory(call_addr, list(new_instr))
-
-
-def _is_in_executable_range(address: int,
-                            process_controller: ProcessController) -> bool:
-    """
-    Check if an address is located in an executable memory range.
-    """
-    mem_range = process_controller.find_range_by_address(address)
-    if mem_range is None:
-        return False
-
-    protection: str = mem_range.protection[2]
-    return protection == 'x'
