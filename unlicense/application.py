@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 import threading
 from pathlib import Path
@@ -32,6 +33,9 @@ def run_unlicense(
     Unpack executables protected with Themida/WinLicense 2.x and 3.x
     """
     setup_logger(LOG, verbose)
+
+    # Make sure child processes won't try to run as administrator
+    _force_run_as_invoker()
 
     pe_path = Path(pe_to_dump)
     if not pe_path.is_file():
@@ -115,3 +119,7 @@ def run_unlicense(
     finally:
         # Try to kill the process on exit
         process_controller.terminate_process()
+
+
+def _force_run_as_invoker() -> None:
+    os.environ["__COMPAT_LAYER"] = "RUNASINVOKER"

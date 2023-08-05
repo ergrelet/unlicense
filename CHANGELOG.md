@@ -9,6 +9,7 @@
 - Fix TLS callback detection for some 32-bit EXEs
 - Handle wrapped imports from Themida/Winlicense 3.1.4.0
 - Improve IAT search algorithm for Themida/Winlicense 3.x
+- Allow dumping EXEs that require admin privilege at medium integrity level
 
 ### Changed
 - Silence some misleading "error" logs that were emitted
