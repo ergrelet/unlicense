@@ -2,6 +2,7 @@ import gc
 import logging
 import os
 import platform
+import shutil
 import struct
 from tempfile import TemporaryDirectory
 from typing import List, Optional
@@ -85,7 +86,7 @@ def dump_pe(
             return False
 
         LOG.info("Rebuilding PE ...")
-        _rebuild_pe(output_file_name)
+        _fix_pe(output_file_name)
 
         LOG.info("Output file has been saved at '%s'", output_file_name)
 
@@ -109,7 +110,14 @@ def dump_dotnet_assembly(
     return True
 
 
-def _rebuild_pe(pe_file_path: str) -> None:
+def _fix_pe(pe_file_path: str) -> None:
+    with TemporaryDirectory() as tmp_dir:
+        TMP_FILE_PATH = os.path.join(tmp_dir, "unlicense.tmp")
+        _rebuild_pe(pe_file_path, TMP_FILE_PATH)
+        _resize_pe(TMP_FILE_PATH, pe_file_path)
+
+
+def _rebuild_pe(pe_file_path: str, output_file_path: str) -> None:
     binary = lief.PE.parse(pe_file_path)
     if binary is None:
         LOG.error("Failed to parse PE '%s'", pe_file_path)
@@ -127,23 +135,7 @@ def _rebuild_pe(pe_file_path: str) -> None:
     builder.build_dos_stub(True)
     builder.build_overlay(True)
     builder.build()
-    builder.write(pe_file_path)
-
-    number_of_sections = len(binary.sections)
-    if number_of_sections == 0:
-        # Shouldn't happen but hey
-        return
-
-    # Determine the actual PE raw size
-    highest_section = binary.sections[0]
-    for section in lief_pe_sections(binary):
-        if section.offset > highest_section.offset:
-            highest_section = section
-    pe_size = highest_section.offset + highest_section.size
-
-    # Truncate file
-    with open(pe_file_path, "ab") as pe_file:
-        pe_file.truncate(pe_size)
+    builder.write(output_file_path)
 
 
 def _resolve_section_names(binary: lief.PE.Binary) -> None:
@@ -160,6 +152,43 @@ def _resolve_section_names(binary: lief.PE.Binary) -> None:
             LOG.debug(".text section found (RVA=%s)",
                       hex(section.virtual_address))
             section.name = ".text"
+
+
+def _resize_pe(pe_file_path: str, output_file_path: str) -> None:
+    pe_size = _get_pe_size(pe_file_path)
+    if pe_size is None:
+        return None
+
+    # Copy file
+    shutil.copy(pe_file_path, output_file_path)
+    # Truncate file
+    with open(output_file_path, "ab") as pe_file:
+        pe_file.truncate(pe_size)
+
+
+def _get_pe_size(pe_file_path: str) -> Optional[int]:
+    binary = lief.PE.parse(pe_file_path)
+    if binary is None:
+        LOG.error("Failed to parse PE '%s'", pe_file_path)
+        return None
+
+    number_of_sections = len(binary.sections)
+    if number_of_sections == 0:
+        # Shouldn't happen but hey
+        return None
+
+    # Determine the actual PE raw size
+    highest_section = binary.sections[0]
+    for section in lief_pe_sections(binary):
+        # Select section with the highest offset
+        if section.offset > highest_section.offset:
+            highest_section = section
+        # If sections have the same offset, select the one with the biggest size
+        elif section.offset == highest_section.offset and section.size > highest_section.size:
+            highest_section = section
+    pe_size = highest_section.offset + highest_section.size
+
+    return pe_size
 
 
 def pointer_size_to_fmt(pointer_size: int) -> str:

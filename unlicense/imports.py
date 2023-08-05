@@ -3,8 +3,8 @@ import struct
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from capstone import Cs
-from capstone.x86 import X86_OP_MEM, X86_OP_IMM
+from capstone import Cs  # type: ignore
+from capstone.x86 import X86_OP_MEM, X86_OP_IMM  # type: ignore
 
 from .dump_utils import pointer_size_to_fmt
 from .process_control import Architecture, MemoryRange, ProcessController, ProcessControllerException

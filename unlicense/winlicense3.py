@@ -2,7 +2,7 @@ import logging
 import struct
 from typing import Tuple, Dict, Any, Optional
 
-from capstone import CS_ARCH_X86, CS_MODE_32, CS_MODE_64, Cs
+from capstone import CS_ARCH_X86, CS_MODE_32, CS_MODE_64, Cs  # type: ignore
 
 from .imports import find_wrapped_imports
 from .dump_utils import dump_pe, pointer_size_to_fmt
@@ -59,7 +59,7 @@ def _find_iat(process_controller: ProcessController, image_base: int,
         # Linear scan found something, return that
         return linear_scan_result
 
-    # Second way: look for wrapper imports in the text section
+    # Second way: look for wrapped imports in the text section
     LOG.info("Looking for wrapped imports in code sections...")
     return _find_iat_from_code_sections(process_controller, image_base,
                                         text_section_range, exports_dict)
