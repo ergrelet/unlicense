@@ -8,7 +8,7 @@ from typing import Optional
 import fire  # type: ignore
 
 from . import frida_exec, winlicense2, winlicense3
-from .dump_utils import dump_dotnet_assembly, interpreter_can_dump_pe, probe_text_sections
+from .dump_utils import dump_dotnet_assembly, dump_pe, get_section_ranges, interpreter_can_dump_pe, probe_text_sections
 from .logger import setup_logger
 from .version_detection import detect_winlicense_version
 
@@ -25,6 +25,7 @@ def run_unlicense(
     pe_to_dump: str,
     verbose: bool = False,
     pause_on_oep: bool = False,
+    no_imports: bool = False,
     force_oep: Optional[int] = None,
     target_version: Optional[int] = None,
     timeout: int = 10,
@@ -59,6 +60,7 @@ def run_unlicense(
                   "This is most likely a 32 vs 64 bit mismatch.")
         sys.exit(3)
 
+    section_ranges = get_section_ranges(pe_to_dump)
     text_section_ranges = probe_text_sections(pe_to_dump)
     if text_section_ranges is None:
         LOG.error("Failed to automatically detect .text section")
@@ -107,6 +109,10 @@ def run_unlicense(
             LOG.info("Dumping .NET assembly ...")
             if not dump_dotnet_assembly(process_controller, dumped_image_base):
                 LOG.error(".NET assembly dump failed")
+        # Do not bother recovering imports and start dumping if requested
+        elif no_imports:
+            dump_pe(process_controller, pe_to_dump, dumped_image_base,
+                    dumped_oep, 0, 0, True)
         # Fix imports and dump the executable
         elif target_version == 2:
             winlicense2.fix_and_dump_pe(process_controller, pe_to_dump,
@@ -115,7 +121,7 @@ def run_unlicense(
         elif target_version == 3:
             winlicense3.fix_and_dump_pe(process_controller, pe_to_dump,
                                         dumped_image_base, dumped_oep,
-                                        text_section_range)
+                                        section_ranges, text_section_range)
     finally:
         # Try to kill the process on exit
         process_controller.terminate_process()

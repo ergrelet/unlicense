@@ -1,6 +1,6 @@
 import logging
 import struct
-from typing import Tuple, Dict, Any, Optional
+from typing import List, Tuple, Dict, Any, Optional
 
 from capstone import CS_ARCH_X86, CS_MODE_32, CS_MODE_64, Cs  # type: ignore
 
@@ -15,12 +15,14 @@ IAT_MAX_SUCCESSIVE_FAILURES = 2
 
 def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
                     image_base: int, oep: int,
+                    section_ranges: List[MemoryRange],
                     text_section_range: MemoryRange) -> None:
     """
     Main dumping routine for Themida/WinLicense 3.x.
     """
     LOG.info("Looking for the IAT...")
-    iat_range = _find_iat(process_controller, image_base, text_section_range)
+    iat_range = _find_iat(process_controller, image_base, section_ranges,
+                          text_section_range)
     if iat_range is None:
         LOG.error("IAT not found")
         return
@@ -43,6 +45,7 @@ def fix_and_dump_pe(process_controller: ProcessController, pe_file_path: str,
 
 
 def _find_iat(process_controller: ProcessController, image_base: int,
+              section_ranges: List[MemoryRange],
               text_section_range: MemoryRange) -> Optional[MemoryRange]:
     """
     Try to find the "obfuscated" IAT. It seems the start of the IAT is always
@@ -54,6 +57,8 @@ def _find_iat(process_controller: ProcessController, image_base: int,
     # First way: look for "good-looking" memory pages in the main module
     LOG.info("Performing linear scan in data sections...")
     linear_scan_result = _find_iat_from_data_sections(process_controller,
+                                                      image_base,
+                                                      section_ranges,
                                                       exports_dict)
     if linear_scan_result is not None:
         # Linear scan found something, return that
@@ -66,13 +71,28 @@ def _find_iat(process_controller: ProcessController, image_base: int,
 
 
 def _find_iat_from_data_sections(
-        process_controller: ProcessController,
+        process_controller: ProcessController, image_base: int,
+        section_ranges: List[MemoryRange],
         exports_dict: Dict[int, Dict[str, Any]]) -> Optional[MemoryRange]:
     """
     Look for "good-looking" memory pages in the main module.
     """
+    page_size = process_controller.page_size
+    # Look at the beginning of PE sections
+    for section_range in section_ranges:
+        page_addr = image_base + section_range.base
+        data = process_controller.read_process_memory(page_addr, page_size)
+        LOG.debug("Looking for the IAT at (%s, %s)", hex(page_addr),
+                  hex(page_size))
+        iat_start_offset = _find_iat_start(data, exports_dict,
+                                           process_controller)
+        if iat_start_offset is not None:
+            return MemoryRange(page_addr + iat_start_offset,
+                               section_range.size - iat_start_offset,
+                               section_range.protection)
+
+    # Look at memory ranges
     for m_range in process_controller.main_module_ranges:
-        page_size = process_controller.page_size
         page_count = m_range.size // page_size
         # Empirical choice: look at the first 4 pages of each memory range
         for page_index in range(0, min(4, page_count)):
@@ -240,7 +260,7 @@ def _unwrap_iat(
     new_iat_data = bytearray()
     resolved_import_count = 0
     successive_failures = 0
-    first_failure_offset = 0
+    last_resolution_offset = 0
     for current_addr in range(iat_range.base, iat_range.base + iat_range.size,
                               process_controller.page_size):
         data_size = process_controller.page_size - (
@@ -256,8 +276,6 @@ def _unwrap_iat(
                 resolved_api = resolve_wrapped_api(wrapper_start,
                                                    process_controller)
                 if resolved_api not in exports_dict:
-                    if successive_failures == 0:
-                        first_failure_offset = len(new_iat_data)
                     successive_failures += 1
                     # Note: When TLS callbacks are used, `kernel32.ExitProcess`
                     # is hooked via the IAT and thus might not resolved properly.
@@ -267,6 +285,7 @@ def _unwrap_iat(
                               hex(resolved_api))
                     new_iat_data += struct.pack(ptr_format, resolved_api)
                     resolved_import_count += 1
+                    last_resolution_offset = len(new_iat_data)
                     if successive_failures > 0:
                         LOG.warning(
                             "A resolved API wasn't an export, "
@@ -276,7 +295,7 @@ def _unwrap_iat(
                 # Dumb check to detect the "end" of the IAT
                 if resolved_api is None and successive_failures >= IAT_MAX_SUCCESSIVE_FAILURES:
                     # Remove the last elements
-                    new_iat_data = new_iat_data[:first_failure_offset]
+                    new_iat_data = new_iat_data[:last_resolution_offset + 1]
                     # Ensure the range is writable
                     process_controller.set_memory_protection(
                         iat_range.base, len(new_iat_data), "rw-")
@@ -288,14 +307,15 @@ def _unwrap_iat(
                 # Not wrapped, add as is
                 new_iat_data += struct.pack(ptr_format, wrapper_start)
                 resolved_import_count += 1
+                last_resolution_offset = len(new_iat_data)
                 if successive_failures > 0:
                     LOG.warning(
                         "A resolved API wasn't an export, "
                         "it's been replaced with 'kernel32.ExitProcess'.")
                     successive_failures = 0
             else:
-                # Junk pointer (most likely null). Keep as null for alignment
-                new_iat_data += struct.pack(ptr_format, 0)
+                # Junk pointer (most likely null). Keep for alignment
+                new_iat_data += struct.pack(ptr_format, wrapper_start)
 
     # Update IAT with the our newly computed IAT
     if len(new_iat_data) > 0:

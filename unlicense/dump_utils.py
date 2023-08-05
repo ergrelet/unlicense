@@ -17,6 +17,21 @@ from .process_control import MemoryRange, ProcessController
 LOG = logging.getLogger(__name__)
 
 
+def get_section_ranges(pe_file_path: str) -> List[MemoryRange]:
+    section_ranges: List[MemoryRange] = []
+    binary = lief.PE.parse(pe_file_path)
+    if binary is None:
+        LOG.error("Failed to parse PE '%s'", pe_file_path)
+        return section_ranges
+
+    for section in lief_pe_sections(binary):
+        section_ranges += [
+            MemoryRange(section.virtual_address, section.virtual_size, "r--")
+        ]
+
+    return section_ranges
+
+
 def probe_text_sections(pe_file_path: str) -> Optional[List[MemoryRange]]:
     text_sections = []
     binary = lief.PE.parse(pe_file_path)

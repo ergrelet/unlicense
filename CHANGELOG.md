@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+- Add a `--no_imports` option that allows dumping PEs at the original entry point without fixing imports
+
 ### Fixed
 - Fix a potential deadlock when dumping DLLs
 - Improve version detection for Themida/Winlicense 3.x
