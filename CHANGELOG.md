@@ -6,6 +6,7 @@
 
 ### Fixed
 - Fix a potential deadlock when dumping DLLs
+- Improve version detection for Themida/Winlicense 2.x
 - Improve version detection for Themida/Winlicense 3.x
 - Improve .text section detection for Themida/Winlicense 3.x
 - Fix `lief.not_found` exception happening when dumping certain MinGW EXEs

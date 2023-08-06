@@ -37,13 +37,16 @@ def detect_winlicense_version(pe_file_path: str) -> Optional[int]:
 
     # These x86 instructions are always present at the beginning of a section
     # in Themida/WinLicense 2.x
-    instr_pattern = [
+    instr_patterns = [[
         0x56, 0x50, 0x53, 0xE8, 0x01, 0x00, 0x00, 0x00, 0xCC, 0x58
-    ]
+    ], [
+        0x83, 0xEC, 0x04, 0x50, 0x53, 0xE8, 0x01, 0x00, 0x00, 0x00, 0xCC, 0x58
+    ]]
 
     for section in lief_pe_sections(binary):
-        if instr_pattern == list(section.content[:len(instr_pattern)]):
-            return 2
+        for pattern in instr_patterns:
+            if pattern == list(section.content[:len(pattern)]):
+                return 2
 
     # Failed to automatically detect version
     return None
