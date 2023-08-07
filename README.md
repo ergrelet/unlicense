@@ -1,4 +1,4 @@
-# Unlicense [![](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/) ![CI status x64](https://github.com/ergrelet/unlicense/actions/workflows/py310-win64-ci.yml/badge.svg?branch=main) ![CI status x86](https://github.com/ergrelet/unlicense/actions/workflows/py310-win32-ci.yml/badge.svg?branch=main)
+# Unlicense [![](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/) ![CI status](https://github.com/ergrelet/unlicense/actions/workflows/check.yml/badge.svg?branch=main)
 
 A Python 3 tool to dynamically unpack executables protected with
 Themida/WinLicense 2.x and 3.x.
@@ -42,16 +42,16 @@ Otherwise here's what the CLI looks like:
 ```
 unlicense --help
 NAME
-    unlicense - Unpack executables protected with Themida/WinLicense 2.x and 3.x
+    unlicense.exe - Unpack executables protected with Themida/WinLicense 2.x and 3.x
 
 SYNOPSIS
-    unlicense EXE_TO_DUMP <flags>
+    unlicense.exe PE_TO_DUMP <flags>
 
 DESCRIPTION
     Unpack executables protected with Themida/WinLicense 2.x and 3.x
 
 POSITIONAL ARGUMENTS
-    EXE_TO_DUMP
+    PE_TO_DUMP
         Type: str
 
 FLAGS
@@ -61,11 +61,14 @@ FLAGS
     --pause_on_oep=PAUSE_ON_OEP
         Type: bool
         Default: False
+    --no_imports=NO_IMPORTS
+        Type: bool
+        Default: False
     --force_oep=FORCE_OEP
-        Type: Optional[typing.Optional[int]]
+        Type: Optional[Optional]
         Default: None
     --target_version=TARGET_VERSION
-        Type: Optional[typing.Optional[int]]
+        Type: Optional[Optional]
         Default: None
     --timeout=TIMEOUT
         Type: int
