@@ -46,7 +46,7 @@ def probe_text_sections(pe_file_path: str) -> Optional[List[MemoryRange]]:
         stripped_section_name = section_name.replace(' ',
                                                      '').replace('\00', '')
         if len(stripped_section_name) > 0 and stripped_section_name != ".text":
-            break
+            continue
 
         if section.has_characteristic(
                 lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE):
