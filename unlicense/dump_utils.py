@@ -39,13 +39,16 @@ def probe_text_sections(pe_file_path: str) -> Optional[List[MemoryRange]]:
         LOG.error("Failed to parse PE '%s'", pe_file_path)
         return None
 
-    # Find the potential text sections (i.e., executable sections with "empty"
-    # names or named '.text')
+    # Find the potential original text sections (i.e., executable sections with
+    # "empty" names or named '.text*').
+    # Note(ergrelet): we thus do not want to include Themida/WinLicense's
+    # sections in that list.
     for section in lief_pe_sections(binary):
         section_name = section.fullname
         stripped_section_name = section_name.replace(' ',
                                                      '').replace('\00', '')
-        if len(stripped_section_name) > 0 and stripped_section_name != ".text":
+        if len(stripped_section_name) > 0 and \
+                stripped_section_name not in [".text", ".textbss", ".textidx"]:
             break
 
         if section.has_characteristic(
