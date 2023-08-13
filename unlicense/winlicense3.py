@@ -184,7 +184,7 @@ def _find_iat_start(data: bytes, exports: Dict[int, Dict[str, Any]],
     """
     Check whether `data` looks like an "obfuscated" IAT. Themida 3.x wraps
     most of the imports but not all of them (the threshold of 2% of valid
-    imports and 80% of pointers to R*X memory has been chosen empirically).
+    imports and 75% of pointers to R*X memory has been chosen empirically).
     Returns `None` if this doesn't look like there's an obfuscated IAT in `data`.
     """
     ptr_format = pointer_size_to_fmt(process_controller.pointer_size)
@@ -232,7 +232,7 @@ def _find_iat_start(data: bytes, exports: Dict[int, Dict[str, Any]],
     LOG.debug("Valid APIs count: %d", valid_ptr_count)
     LOG.debug("R*X destination count: %d", rx_dest_count)
     required_valid_elements = int(1 + (non_null_count * 0.02))
-    required_rx_elements = int(1 + (non_null_count * 0.80))
+    required_rx_elements = int(1 + (non_null_count * 0.75))
     if valid_ptr_count >= required_valid_elements and rx_dest_count >= required_rx_elements:
         return start_offset
     return None
