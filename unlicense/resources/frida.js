@@ -5,6 +5,7 @@ const reset = "\x1b[0m"
 
 let allocatedBuffers = [];
 let originalPageProtections = new Map();
+let oepTracingListeners = [];
 let oepReached = false;
 
 // DLLs-related
@@ -47,11 +48,16 @@ function rangeContainsAddress(range, address) {
 
 function notifyOepFound(dumpedModule, oepCandidate) {
     oepReached = true;
-    restoreIntendedPagesProtections();
+    
+    // Make OEP ranges readable and writeable during the dumping phase
+    setOepRangesProtection('rw-');
+    // Remove hooks used to find the OEP
+    removeOepTracingHooks();
 
     let isDotNetInitialized = isDotNetProcess();
     send({ 'event': 'oep_reached', 'OEP': oepCandidate, 'BASE': dumpedModule.base, 'DOTNET': isDotNetInitialized })
     let sync_op = recv('block_on_oep', function (_value) { });
+    // Note: never returns
     sync_op.wait();
 }
 
@@ -65,17 +71,22 @@ function makeOepRangesInaccessible(dumpedModule, expectedOepRanges) {
         const sectionStart = dumpedModule.base.add(oepRange[0]);
         const expectedSectionSize = oepRange[1];
         Memory.protect(sectionStart, expectedSectionSize, '---');
-        originalPageProtections.set(sectionStart.toString(), [expectedSectionSize, "r-x"]);
+        originalPageProtections.set(sectionStart.toString(), expectedSectionSize);
     });
 }
 
-function restoreIntendedPagesProtections() {
-    // Restore pages' intended protections
-    originalPageProtections.forEach((pair, address_str, _map) => {
-        let size = pair[0];
-        let originalProtection = pair[1];
-        Memory.protect(ptr(address_str), size, originalProtection);
+function setOepRangesProtection(protection) {
+    // Set pages' protection
+    originalPageProtections.forEach((size, address_str, _map) => {
+        Memory.protect(ptr(address_str), size, protection);
     });
+}
+
+function removeOepTracingHooks() {
+    oepTracingListeners.forEach(listener => {
+        listener.detach();
+    })
+    oepTracingListeners = [];
 }
 
 function registerExceptionHandler(dumpedModule, expectedOepRanges, moduleIsDll) {
@@ -132,22 +143,26 @@ function registerExceptionHandler(dumpedModule, expectedOepRanges, moduleIsDll) 
                     expectionHandled = true;
                     return;
                 }
-
-                log(`OEP found (thread #${threadId}): ${oepCandidate}`);
+                
                 if (moduleIsDll) {
                     // Save the potential OEP and and skip `DllMain` (`DLL_PROCESS_ATTACH`).
                     // Note: When dumping DLLs we have to release the loader
                     // lock before starting to dump.
                     // Other threads might call `DllMain` with the `DLL_THREAD_ATTACH`
-                    // reason later on but it's okay.
-                    dllOepCandidate = oepCandidate;
+                    // or `DLL_THREAD_DETACH` reasons later so we also skip the `DllMain`
+                    // even after the OEP has been reached.
+                    if (!oepReached) {
+                        log(`OEP found (thread #${threadId}): ${oepCandidate}`);
+                        dllOepCandidate = oepCandidate;
+                    } 
+
                     skipDllEntryPoint(exp.context);
-                    restoreIntendedPagesProtections();
                     expectionHandled = true;
                     return;
                 }
 
                 // Report the potential OEP
+                log(`OEP found (thread #${threadId}): ${oepCandidate}`);
                 notifyOepFound(dumpedModule, oepCandidate);
             }
         });
@@ -230,7 +245,7 @@ rpc.exports = {
         // Hook `ntdll.LdrLoadDll` on exit to get called at a point where the
         // loader lock is released. Needed to unpack (32-bit) DLLs.
         const loadDll = Module.findExportByName('ntdll', 'LdrLoadDll');
-        Interceptor.attach(loadDll, {
+        const loadDllListener = Interceptor.attach(loadDll, {
             onLeave: function (_args) {
                 // If `dllOepCandidate` is set, proceed with the dumping
                 // but only once (for our target). Then let other executions go
@@ -240,11 +255,12 @@ rpc.exports = {
                 }
             }
         });
+        oepTracingListeners.push(loadDllListener);
 
         let exceptionHandlerRegistered = false;
         const ntProtectVirtualMemory = Module.findExportByName('ntdll', 'NtProtectVirtualMemory');
         if (ntProtectVirtualMemory != null) {
-            Interceptor.attach(ntProtectVirtualMemory, {
+            const ntProtectVirtualMemoryListener = Interceptor.attach(ntProtectVirtualMemory, {
                 onEnter: function (args) {
                     let addr = args[1].readPointer();
                     if (dumpedModule != null && addr.equals(dumpedModule.base)) {
@@ -258,6 +274,7 @@ rpc.exports = {
                     }
                 }
             });
+            oepTracingListeners.push(ntProtectVirtualMemoryListener);
         }
 
         // Hook `ntdll.RtlActivateActivationContextUnsafeFast` on exit as a mean
@@ -265,7 +282,7 @@ rpc.exports = {
         // point is called. Needed to unpack DLLs.
         let initializeFusionHooked = false;
         const activateActivationContext = Module.findExportByName('ntdll', 'RtlActivateActivationContextUnsafeFast');
-        Interceptor.attach(activateActivationContext, {
+        const activateActivationContextListener = Interceptor.attach(activateActivationContext, {
             onLeave: function (_args) {
                 if (dumpedModule == null) {
                     dumpedModule = Process.findModuleByName(moduleName);
@@ -290,42 +307,44 @@ rpc.exports = {
                 // initialization, to dump .NET EXE assemblies
                 const initializeFusion = Module.findExportByName('clr', 'InitializeFusion');
                 if (initializeFusion != null && !initializeFusionHooked) {
-                    Interceptor.attach(initializeFusion, {
+                    const initializeFusionListener = Interceptor.attach(initializeFusion, {
                         onEnter: function (_args) {
                             log(`.NET assembly loaded (thread #${this.threadId})`);
                             notifyOepFound(dumpedModule, '0');
                         }
                     });
+                    oepTracingListeners.push(initializeFusionListener);
                     initializeFusionHooked = true;
                 }
             }
         });
+        oepTracingListeners.push(activateActivationContextListener);
+    },
+    notifyDumpingFinished: function () {
+        // Make OEP executable again once dumping is finished
+        setOepRangesProtection('rwx');
     },
     getArchitecture: function () { return Process.arch; },
     getPointerSize: function () { return Process.pointerSize; },
     getPageSize: function () { return Process.pageSize; },
     findModuleByAddress: function (address) {
-        let module = Process.findModuleByAddress(ptr(address));
-        return module == null ? undefined : module;
+        return Process.findModuleByAddress(ptr(address));
     },
     findRangeByAddress: function (address) {
-        let range = Process.findRangeByAddress(ptr(address));
-        return range == null ? undefined : range;
+        return Process.findRangeByAddress(ptr(address));
     },
-    findExportByName: function (module_name, export_name) {
-        let mod = Process.findModuleByName(module_name);
+    findExportByName: function (moduleName, exportName) {
+        const mod = Process.findModuleByName(moduleName);
         if (mod == null) {
-            return undefined;
+            return null;
         }
 
-        let address = mod.findExportByName(export_name);
-        return address == null ? undefined : address;
+        return mod.findExportByName(exportName);
     },
     enumerateModules: function () {
         const modules = Process.enumerateModules();
-        let moduleNames = [];
-        modules.forEach(module => {
-            moduleNames = moduleNames.concat(module.name);
+        const moduleNames = modules.map(module => {
+            return module.name;
         });
         return moduleNames;
     },
@@ -338,21 +357,22 @@ rpc.exports = {
     },
     enumerateExportedFunctions: function (excludedModuleName) {
         const modules = Process.enumerateModules();
-        let exports = [];
-        modules.forEach(m => {
+        const exports = modules.reduce((acc, m) => {
             if (m.name != excludedModuleName) {
                 m.enumerateExports().forEach(e => {
-                    if (e.type == "function") {
-                        exports = exports.concat(e);
+                    if (e.type == "function" && e.hasOwnProperty('address')) {           
+                        acc.push(e);
                     }
                 });
             }
-        });
+
+            return acc;
+        }, []);
         return exports;
     },
     allocateProcessMemory: function (size, near) {
-        let sizeRounded = size + (Process.pageSize - size % Process.pageSize);
-        let addr = Memory.alloc(sizeRounded, { near: ptr(near), maxDistance: 0xff000000 });
+        const sizeRounded = size + (Process.pageSize - size % Process.pageSize);
+        const addr = Memory.alloc(sizeRounded, { near: ptr(near), maxDistance: 0xff000000 });
         allocatedBuffers.push(addr)
         return addr;
     },

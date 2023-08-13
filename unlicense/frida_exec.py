@@ -38,16 +38,18 @@ class FridaProcessController(ProcessController):
                                                                 Any]]] = None
 
     def find_module_by_address(self, address: int) -> Optional[Dict[str, Any]]:
-        value: Optional[Dict[
-            str, Any]] = self._frida_rpc.find_module_by_address(address)
+        value: Optional[Dict[str,
+                             Any]] = self._frida_rpc.find_module_by_address(
+                                 hex(address))
         return value
 
     def find_range_by_address(
             self,
             address: int,
             include_data: bool = False) -> Optional[MemoryRange]:
-        value: Optional[Dict[
-            str, Any]] = self._frida_rpc.find_range_by_address(address)
+        value: Optional[Dict[str,
+                             Any]] = self._frida_rpc.find_range_by_address(
+                                 hex(address))
         if value is None:
             return None
         return self._frida_range_to_mem_range(value, include_data)
@@ -94,7 +96,8 @@ class FridaProcessController(ProcessController):
 
     def query_memory_protection(self, address: int) -> str:
         try:
-            protection: str = self._frida_rpc.query_memory_protection(address)
+            protection: str = self._frida_rpc.query_memory_protection(
+                hex(address))
             return protection
         except frida.core.RPCException as rpc_exception:
             raise QueryProcessMemoryError from rpc_exception
@@ -102,7 +105,7 @@ class FridaProcessController(ProcessController):
     def set_memory_protection(self, address: int, size: int,
                               protection: str) -> bool:
         result: bool = self._frida_rpc.set_memory_protection(
-            address, size, protection)
+            hex(address), size, protection)
         return result
 
     def read_process_memory(self, address: int, size: int) -> bytes:
@@ -111,7 +114,7 @@ class FridaProcessController(ProcessController):
             for offset in range(0, size, MAX_DATA_CHUNK_SIZE):
                 chunk_size = min(MAX_DATA_CHUNK_SIZE, size - offset)
                 data = self._frida_rpc.read_process_memory(
-                    address + offset, chunk_size)
+                    hex(address + offset), chunk_size)
                 if data is None:
                     raise ReadProcessMemoryError(
                         "read_process_memory failed (invalid parameters?)")
@@ -122,11 +125,12 @@ class FridaProcessController(ProcessController):
 
     def write_process_memory(self, address: int, data: List[int]) -> None:
         try:
-            self._frida_rpc.write_process_memory(address, data)
+            self._frida_rpc.write_process_memory(hex(address), data)
         except frida.core.RPCException as rpc_exception:
             raise WriteProcessMemoryError from rpc_exception
 
     def terminate_process(self) -> None:
+        self._frida_rpc.notify_dumping_finished()
         frida.kill(self.pid)
         self._frida_session.detach()
 
