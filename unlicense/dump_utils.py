@@ -79,32 +79,33 @@ def dump_pe(
     gc.collect()
 
     with TemporaryDirectory() as tmp_dir:
-        TMP_FILE_PATH = os.path.join(tmp_dir, "unlicense.tmp")
+        TMP_FILE_PATH1 = os.path.join(tmp_dir, "unlicense.tmp2")
+        TMP_FILE_PATH2 = os.path.join(tmp_dir, "unlicense.tmp2")
         try:
             pyscylla.dump_pe(process_controller.pid, image_base, oep,
-                             TMP_FILE_PATH, pe_file_path)
+                             TMP_FILE_PATH1, pe_file_path)
         except pyscylla.ScyllaException as scylla_exception:
             LOG.error("Failed to dump PE: %s", str(scylla_exception))
             return False
 
         LOG.info("Fixing dump ...")
-        output_file_name = f"unpacked_{process_controller.main_module_name}"
         try:
             pyscylla.fix_iat(process_controller.pid, image_base, iat_addr,
-                             iat_size, add_new_iat, TMP_FILE_PATH,
-                             output_file_name)
+                             iat_size, add_new_iat, TMP_FILE_PATH1,
+                             TMP_FILE_PATH2)
         except pyscylla.ScyllaException as scylla_exception:
             LOG.error("Failed to fix IAT: %s", str(scylla_exception))
             return False
 
         try:
-            pyscylla.rebuild_pe(output_file_name, False, True, False)
+            pyscylla.rebuild_pe(TMP_FILE_PATH2, False, True, False)
         except pyscylla.ScyllaException as scylla_exception:
             LOG.error("Failed to rebuild PE: %s", str(scylla_exception))
             return False
 
         LOG.info("Rebuilding PE ...")
-        _fix_pe(output_file_name)
+        output_file_name = f"unpacked_{process_controller.main_module_name}"
+        _fix_pe(TMP_FILE_PATH2, output_file_name)
 
         LOG.info("Output file has been saved at '%s'", output_file_name)
 
@@ -128,11 +129,11 @@ def dump_dotnet_assembly(
     return True
 
 
-def _fix_pe(pe_file_path: str) -> None:
+def _fix_pe(pe_file_path: str, output_file_path: str) -> None:
     with TemporaryDirectory() as tmp_dir:
         TMP_FILE_PATH = os.path.join(tmp_dir, "unlicense.tmp")
         _rebuild_pe(pe_file_path, TMP_FILE_PATH)
-        _resize_pe(TMP_FILE_PATH, pe_file_path)
+        _resize_pe(TMP_FILE_PATH, output_file_path)
 
 
 def _rebuild_pe(pe_file_path: str, output_file_path: str) -> None:
