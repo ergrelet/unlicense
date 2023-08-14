@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.4.0] - 2023-08-14
 ### Added
 - Add a `--no_imports` option that allows dumping PEs at the original entry point without fixing imports
 
