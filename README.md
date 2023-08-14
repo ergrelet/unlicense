@@ -21,6 +21,8 @@ Note: You need to use a 32-bit Python interpreter to dump 32-bit executables.
 * Doesn't handle .NET assembly DLLs
 * Doesn't produce runnable dumps in most cases
 * Resolving imports for 32-bit executables packed with Themida 2.x is pretty slow
+* Requires a valid license file to unpack WinLicense-protected executables that
+  require license files to start
 
 ## How To
 
