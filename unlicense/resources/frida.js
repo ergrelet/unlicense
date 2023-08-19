@@ -11,7 +11,6 @@ let oepReached = false;
 // DLLs-related
 let skipDllOepInstr32 = null;
 let skipDllOepInstr64 = null;
-let dllOepCandidate = null;
 
 // TLS-related
 let skipTlsInstr32 = null;
@@ -56,9 +55,11 @@ function notifyOepFound(dumpedModule, oepCandidate) {
 
     let isDotNetInitialized = isDotNetProcess();
     send({ 'event': 'oep_reached', 'OEP': oepCandidate, 'BASE': dumpedModule.base, 'DOTNET': isDotNetInitialized })
-    let sync_op = recv('block_on_oep', function (_value) { });
+    let _sync_op = recv('block_on_oep', function (_value) { });
     // Note: never returns
-    sync_op.wait();
+    while(true) {
+        Thread.sleep(3600.0);
+    }
 }
 
 function isDotNetProcess() {
@@ -125,6 +126,8 @@ function registerExceptionHandler(dumpedModule, expectedOepRanges, moduleIsDll) 
             }
         }
 
+        const ldrUnlockLoaderLockAddr = Module.findExportByName('ntdll', 'LdrUnlockLoaderLock');
+        const ldrUnlockLoaderLock = new NativeFunction(ldrUnlockLoaderLockAddr, 'uint32', ['uint32', 'pointer']);
         let expectionHandled = false;
         expectedOepRanges.forEach((oepRange) => {
             const sectionStart = dumpedModule.base.add(oepRange[0]);
@@ -145,15 +148,19 @@ function registerExceptionHandler(dumpedModule, expectedOepRanges, moduleIsDll) 
                 }
                 
                 if (moduleIsDll) {
-                    // Save the potential OEP and and skip `DllMain` (`DLL_PROCESS_ATTACH`).
+                    // Report the potential OEP
                     // Note: When dumping DLLs we have to release the loader
                     // lock before starting to dump.
                     // Other threads might call `DllMain` with the `DLL_THREAD_ATTACH`
                     // or `DLL_THREAD_DETACH` reasons later so we also skip the `DllMain`
                     // even after the OEP has been reached.
                     if (!oepReached) {
+                        const threadId = Process.getCurrentThreadId();
+                        ldrUnlockLoaderLock(0, ptr(threadId << 16));
+
                         log(`OEP found (thread #${threadId}): ${oepCandidate}`);
-                        dllOepCandidate = oepCandidate;
+                        // Note: never returns
+                        notifyOepFound(dumpedModule, oepCandidate);
                     } 
 
                     skipDllEntryPoint(exp.context);
@@ -163,6 +170,7 @@ function registerExceptionHandler(dumpedModule, expectedOepRanges, moduleIsDll) 
 
                 // Report the potential OEP
                 log(`OEP found (thread #${threadId}): ${oepCandidate}`);
+                // Note: never returns
                 notifyOepFound(dumpedModule, oepCandidate);
             }
         });
@@ -241,21 +249,6 @@ rpc.exports = {
         if (!targetIsDll) {
             dumpedModule = Process.findModuleByName(moduleName);
         }
-
-        // Hook `ntdll.LdrLoadDll` on exit to get called at a point where the
-        // loader lock is released. Needed to unpack (32-bit) DLLs.
-        const loadDll = Module.findExportByName('ntdll', 'LdrLoadDll');
-        const loadDllListener = Interceptor.attach(loadDll, {
-            onLeave: function (_args) {
-                // If `dllOepCandidate` is set, proceed with the dumping
-                // but only once (for our target). Then let other executions go
-                // through as it's not DLLs we're intersted in.
-                if (dllOepCandidate != null && !oepReached) {
-                    notifyOepFound(dumpedModule, dllOepCandidate);
-                }
-            }
-        });
-        oepTracingListeners.push(loadDllListener);
 
         let exceptionHandlerRegistered = false;
         const ntProtectVirtualMemory = Module.findExportByName('ntdll', 'NtProtectVirtualMemory');
